@@ -18,9 +18,11 @@ export function readJson(file, fallback = null) {
 
 /** Write JSON via temp file + rename so readers never see a half-written file. */
 export function writeJsonAtomic(file, obj) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Many of these files hold login tokens: owner-only from the first byte. On Windows the profile folder's
+  // ACL already restricts them; the modes matter on macOS / Linux.
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.cam-${process.pid}-${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), { mode: 0o600 });
   for (let i = 0; ; i++) {
     try {
       fs.renameSync(tmp, file);

@@ -109,9 +109,11 @@ export function readLog(n = 30) {
 export function backup(src, prefix, keep = 15) {
   try {
     if (!fs.existsSync(src)) return null;
-    fs.mkdirSync(FILES.backups, { recursive: true });
+    fs.mkdirSync(FILES.backups, { recursive: true, mode: 0o700 });
     const dest = path.join(FILES.backups, `${prefix}.${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
     fs.copyFileSync(src, dest);
+    try { fs.chmodSync(dest, 0o600); } catch {} // backups include login files: owner-only
+
     const old = fs.readdirSync(FILES.backups).filter((f) => f.startsWith(prefix + '.')).sort();
     for (const f of old.slice(0, Math.max(0, old.length - keep))) {
       try { fs.unlinkSync(path.join(FILES.backups, f)); } catch {}
