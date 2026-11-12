@@ -39,6 +39,7 @@ To try your changes end to end, run `node bin/cam.mjs install` from your clone a
 ## Adding a platform
 
 1. Add an adapter to `src/hub/adapters.mjs`: how to start a headless turn, resume a session and turn the CLI's output into events (`user`, `assistant`, `tool`, `file`, `status`, `error`, `usage`).
+   Pass the prompt via stdin or a file if the CLI allows it; otherwise wrap it in `argText()` so it can't be read as a flag. Map `permission: 'read'` to the CLI's own read-only control, and refuse read-only if the CLI has none.
 2. Teach `classify()` the platform's limit, sign-in and model errors.
 3. Add its sign-in and usage details to `PLATFORM_DEFS` in `src/platforms.mjs`.
 4. Test it for real: start an agent, send two turns (the second must resume), stop it mid-turn.

@@ -14,7 +14,7 @@ import { DATA } from '../paths.mjs';
 import { appendLog } from '../store.mjs';
 import { fmtTime } from '../util.mjs';
 import { getAgent, saveAgent, patchAgent, listAgents, appendEvent, readEvents, addLink, eventsPath } from './store.mjs';
-import { adapter, classify, tmpPromptFile } from './adapters.mjs';
+import { adapter, classify, tmpPromptFile, isFlagLike } from './adapters.mjs';
 import { modelTable } from './models.mjs';
 
 const running = new Map(); // agentId -> child process
@@ -99,6 +99,9 @@ async function runTurn(id, message, { retry = 0 } = {}) {
   const bin = ad.resolve();
   if (!bin) return finishStatus(a, 'error', `${ad.label} is not installed on this machine.`, { lastError: 'not installed' });
 
+  if (isFlagLike(a.model) || isFlagLike(a.sessionId)) {
+    return finishStatus(a, 'error', 'Refused: the model name or session id starts with "-".', { lastError: 'invalid model or session id' });
+  }
   let prompt = message;
   if (a.needsRecap) { prompt = buildRecap(a.id) + message; a.needsRecap = false; }
   const multi = PLATFORM_DEFS[a.platform] && !PLATFORM_DEFS[a.platform].swap;

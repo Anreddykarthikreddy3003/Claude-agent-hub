@@ -2,7 +2,8 @@
  * One adapter per agent CLI. Each turns "send this message (resume this session)" into a headless
  * command, and turns the CLI's streamed output into normalised events:
  *   { kind: 'assistant'|'tool'|'tool_result'|'file'|'usage'|'error'|'system', text, name, detail, ok }
- * Prompts are passed via stdin or a temp file (never through a shell), so quoting can't break them.
+ * CLIs are started without a shell. Claude, Codex and Hermes get the prompt via stdin or a temp file;
+ * Kimi and OpenCode only accept it as an argument, so it goes through argText() and can never be read as a flag.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,6 +15,10 @@ import { loadConfig, saveConfig } from '../store.mjs';
 
 const clip = (s, n = 4000) => (s && s.length > n ? s.slice(0, n) + ` …[+${s.length - n} chars]` : s || '');
 const short = (v, n = 300) => clip(typeof v === 'string' ? v : JSON.stringify(v ?? ''), n);
+/** A prompt passed as a command-line argument: a leading space stops a CLI parsing "-x…" as an option. */
+export const argText = (s) => (/^\s*-/.test(String(s ?? '')) ? ' ' + String(s) : String(s ?? ''));
+/** Model names and session ids go after a flag; refuse anything that could itself be read as a flag. */
+export const isFlagLike = (v) => typeof v === 'string' && /^\s*-/.test(v);
 
 const whichCache = new Map(); // `where` is quick but it runs on every turn; cache per process
 function which(name) {
@@ -201,10 +206,11 @@ const kimi = {
   defaultModel: null,
   resolve: () => exeBin('kimi'),
   args({ sessionId, model, permission, prompt }) {
-    const a = ['-p', prompt, '--output-format', 'stream-json'];
+    const a = ['--prompt', argText(prompt), '--output-format', 'stream-json'];
     if (sessionId) a.push('-S', sessionId);
     if (model) a.push('-m', model);
     if (permission === 'full') a.push('--yolo');
+    if (permission === 'read') a.push('--plan'); // plan mode: research only, no changes
     return a;
   },
   parse(j) {
@@ -236,8 +242,14 @@ const opencode = {
     const a = ['run', '--format', 'json', '--print-logs', '--log-level', 'ERROR', '--dir', cwd];
     if (sessionId) a.push('-s', sessionId);
     if (model) a.push('-m', model);
-    a.push(prompt);
+    a.push(argText(prompt));
     return a;
+  },
+  // OpenCode reads its permission config from OPENCODE_PERMISSION. Read-only agents may not edit files or
+  // run shell commands; "deny" fails closed even though a headless run has nobody to answer prompts.
+  env(env, a) {
+    if (a.permission === 'read') env.OPENCODE_PERMISSION = JSON.stringify({ edit: 'deny', bash: 'deny' });
+    return env;
   },
   parse(j) {
     const ev = [];
@@ -270,7 +282,7 @@ const agy = {
   // terminal (console). Until a PTY bridge exists, the hub refuses it with a clear message instead of hanging.
   unsupported: 'agy only prints in a real terminal window (its --print mode hangs when run in the background). Open it from the dashboard with "Open in terminal" instead.',
   args({ sessionId, model, prompt }) {
-    const a = ['--print', prompt];
+    const a = ['--print', argText(prompt)];
     if (sessionId) a.push('--conversation', sessionId);
     if (model) a.push('--model', model);
     return a;
