@@ -1,0 +1,13 @@
+{
+  "name": "claude-agent-hub",
+  "owner": { "name": "Claude Agent Hub contributors" },
+  "metadata": { "description": "Claude Agent Hub: a multi-agent dashboard and account manager for Claude Code." },
+  "plugins": [
+    {
+      "name": "claude-agent-hub",
+      "source": "./",
+      "description": "Claude orchestrates Codex, Kimi, Hermes, OpenCode and Antigravity agents while you watch them live in the IDE. Tracks every account's usage and switches Claude Code accounts automatically.",
+      "version": "1.0.0"
+    }
+  ]
+}

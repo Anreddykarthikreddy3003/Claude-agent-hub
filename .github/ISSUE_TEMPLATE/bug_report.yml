@@ -1,0 +1,61 @@
+name: Bug report
+description: Something doesn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please **remove emails, tokens and file paths with your name** from anything you paste.
+        Security problems go through the Security tab, not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `cam accounts add B`
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agents (start, send, resume, limits)
+        - Dashboard / status bar
+        - Account usage or switching
+        - Install / background service
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Agent platform involved
+      multiple: true
+      options: [Claude Code, Codex, Kimi, Hermes, OpenCode, Antigravity, None]
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `cam doctor`
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "Windows 11, Node 22, Claude Code 2.1.x, VS Code / Antigravity version"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: "`cam log 30` or the Logs tab"
+      render: text

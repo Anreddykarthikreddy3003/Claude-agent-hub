@@ -1,0 +1,10 @@
+{
+  "name": "claude-agent-hub",
+  "version": "1.0.0",
+  "description": "Claude orchestrates Codex, Kimi, Hermes, OpenCode and Antigravity agents (debate, build and test, review) while you watch them live in the IDE. Tracks 5-hour and weekly usage for every account and switches Claude Code accounts automatically.",
+  "author": { "name": "Claude Agent Hub contributors" },
+  "homepage": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub",
+  "repository": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub",
+  "license": "MIT",
+  "keywords": ["multi-agent", "codex", "orchestration", "usage-limits", "account-switcher", "mcp"]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "claude-agent-hub",
+  "version": "1.0.0",
+  "description": "Run Claude Code, OpenAI Codex, Kimi, Hermes, OpenCode and Antigravity agents side by side from one IDE dashboard, with Claude as the orchestrator. Tracks every account's 5-hour and weekly usage and switches Claude Code accounts automatically.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "cam": "bin/cam.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "build:extension": "node scripts/build-vsix.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "claude-code-plugin",
+    "anthropic",
+    "codex",
+    "openai-codex",
+    "multi-agent",
+    "ai-agents",
+    "agent-orchestration",
+    "mcp",
+    "mcp-server",
+    "usage-limits",
+    "account-switcher",
+    "vscode-extension",
+    "antigravity"
+  ],
+  "homepage": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anreddykarthikreddy3003/Claude-agent-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/issues"
+  },
+  "license": "MIT"
+}

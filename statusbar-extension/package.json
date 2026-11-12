@@ -1,0 +1,45 @@
+{
+  "name": "claude-agent-hub",
+  "displayName": "Claude Agent Hub",
+  "description": "Monitor and run Claude, Codex, Hermes, Kimi, OpenCode and Antigravity agents from one dashboard: account usage, live agent conversations, agent map, models and logs.",
+  "publisher": "claude-agent-hub",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub" },
+  "keywords": ["claude", "claude code", "codex", "multi-agent", "ai agents", "usage limits"],
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other", "Machine Learning"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "camSidebar", "title": "Agent Hub", "icon": "media/icon.svg" }]
+    },
+    "views": {
+      "camSidebar": [{ "type": "webview", "id": "camDashboardView", "name": "Agents" }]
+    },
+    "commands": [
+      {
+        "command": "cam.dashboard",
+        "title": "Agent Hub: Open dashboard",
+        "icon": { "light": "media/icon-light.svg", "dark": "media/icon-dark.svg" }
+      },
+      { "command": "cam.refresh", "title": "Agent Hub: Refresh" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "cam.dashboard", "group": "navigation@100" }
+      ]
+    },
+    "configuration": {
+      "title": "Agent Hub",
+      "properties": {
+        "agentHub.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the Agent Hub tab (without taking focus) when your Claude chat starts a helper agent."
+        }
+      }
+    }
+  }
+}

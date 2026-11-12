@@ -1,0 +1,26 @@
+{
+  "description": "Claude Agent Hub: keeps account usage current and switches to the best account when the active one runs out.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/cam.mjs\" hook session-start", "timeout": 20 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/cam.mjs\" hook prompt", "timeout": 30 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/cam.mjs\" hook stop", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}

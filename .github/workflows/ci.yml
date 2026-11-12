@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Unit tests
+        run: npm test
+      - name: Check every module parses
+        shell: bash
+        run: for f in bin/*.mjs src/*.mjs src/hub/*.mjs scripts/*.mjs statusbar-extension/extension.js; do node --check "$f"; done
+      - name: Build the extension (compiles the dashboard script)
+        run: npm run build:extension
+      - name: Upload the extension
+        if: matrix.node == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-agent-hub-vsix
+          path: dist/*.vsix

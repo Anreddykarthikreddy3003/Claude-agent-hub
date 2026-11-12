@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agent-hub": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/cam.mjs", "mcp"]
+    }
+  }
+}
