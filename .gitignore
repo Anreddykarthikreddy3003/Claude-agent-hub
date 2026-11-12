@@ -1,0 +1,17 @@
+# Build output (npm run build:extension)
+dist/
+*.vsix
+
+# Agent transcripts and verdicts written while working on this repo
+.duo/
+
+# Local tool and editor state
+.claude/settings.local.json
+.playwright-mcp/
+.vscode/
+.idea/
+
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
