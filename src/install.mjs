@@ -88,7 +88,8 @@ function installStatusBar() {
   ].filter((p) => fs.existsSync(p));
   const done = [];
   for (const cli of editors) {
-    const r = spawnSync(`"${cli}"`, ['--install-extension', `"${vsix}"`, '--force'], { shell: true, encoding: 'utf8', windowsHide: true, timeout: 120000 });
+    // Editor CLIs are .cmd files, which need a shell. Both paths come from this machine, not from user input.
+    const r = spawnSync(`"${cli}" --install-extension "${vsix}" --force`, { shell: true, encoding: 'utf8', windowsHide: true, timeout: 120000 });
     if (r.status === 0) done.push(path.basename(cli, '.cmd'));
   }
   return done.length
