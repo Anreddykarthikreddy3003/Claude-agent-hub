@@ -1,7 +1,7 @@
 /** Claude Code hook handlers. They must be fast and must never block the user. */
 import { loadAccounts, loadConfig, appendLog } from './store.mjs';
 import { detectActive } from './accounts.mjs';
-import { refreshUsage, snapshot } from './collector.mjs';
+import { refreshUsage, snapshot, activeMaxAgeMs } from './collector.mjs';
 import { autoSwitchIfNeeded } from './switcher.mjs';
 import { ensureDaemon } from './daemon.mjs';
 import { fmtDur, fmtTime } from './util.mjs';
@@ -38,7 +38,7 @@ export async function runHook(event) {
       return;
     }
     const { name: active } = await detectActive();
-    if (active) await refreshUsage({ names: [active], maxAgeMs: event === 'stop' ? 30e3 : 60e3 });
+    if (active) await refreshUsage({ names: [active], maxAgeMs: activeMaxAgeMs(active) });
     const r = await autoSwitchIfNeeded(event);
     publishStatus();
     if (r?.switched) return out({ systemMessage: switchedMsg(r) });

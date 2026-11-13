@@ -12,8 +12,14 @@ async function get(pathname, token, timeoutMs = 10000) {
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
-    const err = new Error(`HTTP ${res.status} from ${pathname}`);
+    // A Cloudflare challenge or HTML error page means the service is having trouble (or is challenging the
+    // network), not that the login is bad. Anthropic's own auth errors come back as JSON.
+    const cloudflare = res.headers.get('cf-mitigated') === 'challenge' || /text\/html/i.test(res.headers.get('content-type') || '');
+    const err = new Error(`HTTP ${res.status} from ${pathname}${cloudflare ? ' (Cloudflare / service page, not a login problem)' : ''}`);
     err.status = res.status;
+    err.cloudflare = cloudflare;
+    const ra = Number(res.headers.get('retry-after'));
+    if (ra > 0) err.retryAfterMs = Math.min(ra, 3600) * 1000;
     throw err;
   }
   return res.json();

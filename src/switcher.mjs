@@ -67,6 +67,10 @@ export async function switchTo(target, reason = 'manual') {
 
     const det = await detectActive({ force: true });
     const from = det.name;
+    // A manual pick of an account already past the switch thresholds is deliberate: hold it until 100%
+    // (like Force) instead of letting the next background check switch straight back.
+    const tv = snapshot().views.find((v) => v.name === target);
+    const holdManual = /^manual/.test(reason || '') && (tv?.status === 'session-limit' || tv?.status === 'weekly-limit');
     if (from === target) return { changed: false, from, to: target, reason };
     if (det.loggedIn && !det.trusted)
       throw new Error('Cannot verify which account Claude Code is logged in to right now (offline or token expired). Not switching, to avoid overwriting a saved login. Will retry.');
@@ -104,7 +108,8 @@ export async function switchTo(target, reason = 'manual') {
       s.lastSwitch = { from, to: target, at: Date.now(), reason };
       delete s.pendingIdentity;
       // any switch that isn't a forced one ends a previous "hold until 100%"
-      if (!/^forced/.test(reason || '')) delete s.forced;
+      if (holdManual) s.forced = { name: target, at: Date.now(), implicit: true };
+      else if (!/^forced/.test(reason || '')) delete s.forced;
     });
 
     // 3) Best-effort display identity (Windows may have ~/.claude.json locked; retried by the daemon).
@@ -114,6 +119,30 @@ export async function switchTo(target, reason = 'manual') {
     publishStatus();
     return { changed: true, from, to: target, reason };
   });
+}
+
+/**
+ * Keep the active account's saved copy current. Claude Code rotates the refresh token every time it refreshes,
+ * so between switches the slot copy goes stale (its refresh token is dead). If the live login were then
+ * overwritten, for example by an older chat writing back its own account, that account would need a new
+ * sign-in. Mirroring verified live tokens into the slot on every check closes that gap.
+ */
+export async function syncActiveSlot() {
+  return withLock(FILES.opsLock, async () => {
+    const det = await detectActive();
+    if (!det.loggedIn || !det.trusted || !det.name) return false;
+    const main = readJsonStrict(MAIN_CREDS);
+    const live = main?.claudeAiOauth;
+    if (!live?.refreshToken || tokenHash(live) !== det.tokenHash) return false; // changed while we looked
+    const slot = readJsonStrict(slotCreds(det.name)) || {};
+    const saved = slot.claudeAiOauth;
+    if (saved && saved.refreshToken === live.refreshToken && saved.accessToken === live.accessToken) return false;
+    if (saved?.expiresAt && live.expiresAt && saved.expiresAt > live.expiresAt) return false; // never go backwards
+    slot.claudeAiOauth = live;
+    writeJsonAtomic(slotCreds(det.name), slot);
+    appendLog('slot-synced', { name: det.name });
+    return true;
+  }, { timeoutMs: 5000 }).catch(() => false);
 }
 
 /**
@@ -156,6 +185,10 @@ export async function autoSwitchIfNeeded(source = 'auto') {
     appendLog('forced-hold-ended', { name: active, five: av?.five?.util, week: av?.week?.util });
   }
   if (active && !needsSwitch(av)) return null;
+  // No ping-pong: after any switch, wait 2 minutes before switching again, unless the account is really
+  // used up or signed out (stale or glitchy numbers must not flip accounts back and forth).
+  const reallyOut = !av || av.status === 'needs-login' || av.status === 'paused' || av.five.util >= 100 || av.week.util >= 100;
+  if (active && !reallyOut && st.lastSwitch?.at && now - st.lastSwitch.at < 2 * 60e3) return null;
 
   const best = rankViews(views.filter((v) => v.name !== active))[0];
   if (!best) {

@@ -25,7 +25,7 @@ export const DEFAULT_CONFIG = {
   /** Alert + prioritise an account whose weekly reset is this close and still has this much unused. */
   wasteAlarm: { hours: 24, unusedPct: 30 },
   /** How often to refresh usage for idle accounts / the active account (minutes). */
-  pollMinutes: 10, // idle accounts only change at their (known) reset times or if used elsewhere
+  pollMinutes: 30, // idle accounts only change at their (known) reset times (always re-checked) or if used elsewhere
   activePollMinutes: 3, // hooks also refresh the active account on every prompt / reply
   /** Background loop interval (seconds). */
   tickSeconds: 60,

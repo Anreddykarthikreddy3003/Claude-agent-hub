@@ -5,8 +5,8 @@ import { FILES, BIN, slotDir } from './paths.mjs';
 import { readJson, writeJsonAtomic, withLock, pidAlive, sleep, fmtTime } from './util.mjs';
 import { loadConfig, loadState, updateState, appendLog } from './store.mjs';
 import { scanPendingSlots, detectActive } from './accounts.mjs';
-import { refreshUsage, snapshot, liveConfigDir } from './collector.mjs';
-import { autoSwitchIfNeeded, retryPendingIdentity } from './switcher.mjs';
+import { refreshUsage, snapshot, liveConfigDir, activeMaxAgeMs } from './collector.mjs';
+import { autoSwitchIfNeeded, retryPendingIdentity, syncActiveSlot } from './switcher.mjs';
 import { planPrimes } from './engine.mjs';
 import { cliPrime } from './claude.mjs';
 import { notify } from './notify.mjs';
@@ -79,10 +79,11 @@ export async function tick() {
   const added = await scanPendingSlots();
   for (const n of added) notify(`Account ${n} added`, 'It is now part of the automatic rotation.');
   await detectActive();
+  await syncActiveSlot(); // keep the active account's saved copy current (tokens rotate on every refresh)
   // Background monitoring switch: when off, only the active Claude account is kept current (needed for auto-switching)
   if (cfg.monitoring !== false) await refreshUsage({ maxAgeMs: cfg.pollMinutes * 60e3 });
   const st = loadState();
-  if (st.active) await refreshUsage({ names: [st.active], maxAgeMs: cfg.activePollMinutes * 60e3 });
+  if (st.active) await refreshUsage({ names: [st.active], maxAgeMs: activeMaxAgeMs(st.active, cfg) });
   await autoSwitchIfNeeded('background');
   await retryPendingIdentity();
   await runDuePrimes();

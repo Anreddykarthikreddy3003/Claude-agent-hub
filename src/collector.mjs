@@ -15,6 +15,18 @@ function infer(prev, now) {
 
 const expired = (o) => !o?.expiresAt || o.expiresAt < Date.now() + 60000;
 
+/** Never ask Anthropic about the same account more than once per 30 s, whatever triggers it (hooks, buttons, tools). */
+const MIN_GAP_MS = 30e3;
+
+/**
+ * How fresh the active account's numbers must be. Normally the configured interval (3 min); once its 5-hour
+ * session passes 85%, every minute, so the switch still happens before the limit is hit.
+ */
+export function activeMaxAgeMs(name, cfg = loadConfig()) {
+  const five = loadState().usage?.[name]?.five?.util ?? 0;
+  return five >= 85 ? 60e3 : cfg.activePollMinutes * 60e3;
+}
+
 /**
  * Where does this account's LIVE login live right now? Decided from the tokens, at the moment of use:
  *  - main, if our trusted record says main belongs to this account, or the slot is a parked copy of main
@@ -63,12 +75,16 @@ async function fetchOne(acc, prev) {
       const u = await fetchUsage(loc.oauth.accessToken);
       return { attemptAt: now, fetchedAt: now, ...u, stale: false, error: null, needsLogin: false };
     } catch (e) {
-      if (e.status === 401 && attempt === 0) continue; // force a CLI refresh, then retry once
+      if (e.status === 401 && attempt === 0 && !e.cloudflare) continue; // force a CLI refresh, then retry once
+      // Only Anthropic's own JSON auth errors mean "sign in again". Outages, Cloudflare challenges and network
+      // failures keep the account as it was (marking it logged out would trigger a needless switch).
+      const authError = !e.cloudflare && (e.status === 401 || e.status === 403);
+      const transient = e.cloudflare || e.status === 429 || e.status >= 500 || !e.status;
       return {
         ...base, ...infer(prev, now), stale: true,
-        needsLogin: e.status === 401 || e.status === 403,
+        needsLogin: authError,
         error: e.message,
-        ...(e.status === 429 || e.status >= 500 ? { backoffUntil: now + 5 * 60e3 } : {}),
+        ...(transient ? { backoffUntil: now + Math.max((e.cloudflare ? 15 : 5) * 60e3, e.retryAfterMs || 0) } : {}),
       };
     }
   }
@@ -90,6 +106,7 @@ export async function refreshUsage({ names = null, maxAgeMs = 0 } = {}) {
     const prev = st.usage?.[acc.name];
     const resetPassed = [prev?.five?.resetsAt, prev?.week?.resetsAt].some((t) => t && t <= now && t > (prev?.attemptAt || 0));
     if (prev?.backoffUntil && prev.backoffUntil > now) continue;
+    if (prev && now - (prev.attemptAt || 0) < MIN_GAP_MS && !resetPassed) continue;
     if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed) continue;
     results[acc.name] = await fetchOne(acc, prev);
   }

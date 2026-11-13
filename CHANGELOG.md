@@ -4,6 +4,15 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- A Cloudflare challenge or outage page from Anthropic no longer marks an account as signed out, so an outage can't trigger needless account switches. Usage checks back off for 15 minutes instead.
+- The active account's saved login now stays current. Claude Code rotates the refresh token on every refresh; previously the saved copy could go stale and need a new sign-in.
+- A manual switch to an account already past 95% of its session (or 98% weekly) is now held until 100%, instead of being switched straight back.
+- No automatic switch within 2 minutes of the previous one, unless the account is used up or signed out.
+
+### Changed
+- Far fewer requests to Anthropic. The active account is checked every 3 minutes (every minute once past 85%), idle accounts every 30 minutes and at their reset times. No account is checked more than once per 30 seconds, and `Retry-After` on 429 responses is honored. Previously, heavy use could cause a check after every prompt and reply.
+
 ## [1.0.0] - 2026-11-12
 
 First public release.
