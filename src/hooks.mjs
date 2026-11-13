@@ -2,7 +2,7 @@
 import { loadAccounts, loadConfig, appendLog } from './store.mjs';
 import { detectActive } from './accounts.mjs';
 import { refreshUsage, snapshot, activeMaxAgeMs } from './collector.mjs';
-import { autoSwitchIfNeeded } from './switcher.mjs';
+import { autoSwitchIfNeeded, switchAtChatStart } from './switcher.mjs';
 import { ensureDaemon } from './daemon.mjs';
 import { fmtDur, fmtTime } from './util.mjs';
 import { publishStatus } from './report.mjs';
@@ -23,8 +23,10 @@ function drainStdin() {
 /** Show accounts by email (falls back to the saved name). */
 const label = (n) => (n ? loadAccounts().find((a) => a.name === n)?.email || n : '?');
 
-function switchedMsg(r) {
-  return `🔄 Claude account switched ${label(r.from)} → ${label(r.to)} (${r.reason}). New chats use ${label(r.to)}; if this chat still reports a limit, start a new chat.`;
+function switchedMsg(r, event) {
+  const head = `🔄 Claude account switched ${label(r.from)} → ${label(r.to)} (${r.reason}).`;
+  if (event === 'session-start') return `${head} This new chat starts on ${label(r.to)}, so nothing is lost.`;
+  return `${head} This chat keeps its full history. Claude's earlier private reasoning stays with ${label(r.from)}, so the next reply rereads the chat once (slower, more tokens). In a long chat, /compact first or start a new chat to save ${label(r.to)}'s quota. If this chat still reports a limit, start a new chat.`;
 }
 
 export async function runHook(event) {
@@ -39,9 +41,10 @@ export async function runHook(event) {
     }
     const { name: active } = await detectActive();
     if (active) await refreshUsage({ names: [active], maxAgeMs: activeMaxAgeMs(active) });
-    const r = await autoSwitchIfNeeded(event);
+    const early = event === 'session-start' ? await switchAtChatStart() : null;
+    const r = early?.switched ? early : await autoSwitchIfNeeded(event);
     publishStatus();
-    if (r?.switched) return out({ systemMessage: switchedMsg(r) });
+    if (r?.switched) return out({ systemMessage: switchedMsg(r, event) });
     if (r?.allLimited)
       return out({ systemMessage: `⛔ All Claude accounts are limited. Next: ${label(r.next?.name)} at ${fmtTime(r.next?.at)}; the switch happens automatically.` });
     if (event === 'session-start') {

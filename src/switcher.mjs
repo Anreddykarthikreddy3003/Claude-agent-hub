@@ -165,6 +165,32 @@ export async function releaseForced() {
   return { released: true };
 }
 
+/**
+ * Called when a new chat starts. Switching mid-chat makes the next reply reread the whole history on the new
+ * account (prompt cache and earlier thinking stay with the old account). A new chat has nothing to reread, so
+ * if the active account is close to its switch point anyway, move now. Only when another account has clearly
+ * more session left, automatic switching is on, nothing is held, and no switch happened in the last 2 minutes.
+ */
+export async function switchAtChatStart() {
+  const cfg = loadConfig();
+  if (cfg.autoSwitch === false) return null;
+  const { st, views, now } = snapshot();
+  const active = st.active;
+  if (!active || st.forced?.name === active) return null;
+  if (st.lastSwitch?.at && now - st.lastSwitch.at < 2 * 60e3) return null;
+  const av = views.find((v) => v.name === active);
+  if (!av || av.status !== 'ok' || av.five.util < (cfg.newChatSwitchAt ?? 90)) return null;
+  const best = rankViews(views.filter((v) => v.name !== active))[0];
+  if (!best || best.five.util > av.five.util - 30) return null; // only when it is clearly better
+  try {
+    const r = await switchTo(best.name, `${av.email || av.name} 5h session at ${av.five.util}%, switched as a new chat started`);
+    return { switched: r.changed, ...r, why: whyBest(best) };
+  } catch (e) {
+    appendLog('switch-deferred', { to: best.name, error: e.message });
+    return null;
+  }
+}
+
 /** Called by the daemon, hooks and the hub: leave the active account if it is limited, pick the best one. */
 export async function autoSwitchIfNeeded(source = 'auto') {
   const { st, views, now } = snapshot();

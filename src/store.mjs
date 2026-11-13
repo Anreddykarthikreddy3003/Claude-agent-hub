@@ -16,6 +16,9 @@ export const DEFAULT_CONFIG = {
   primeCodex: false,
   /** Switch away when the 5-hour session reaches this %. */
   sessionSwitchAt: 95,
+  /** When a NEW chat starts and the active session is already past this %, switch then: a new chat has no
+   *  history to reread on the other account, so it is the cheapest moment (avoids a mid-chat switch soon after). */
+  newChatSwitchAt: 90,
   /** Stop using an account when its weekly usage reaches this %. */
   weeklyStopAt: 98,
   /** Never switch TO an account with less than this % of its session left. */

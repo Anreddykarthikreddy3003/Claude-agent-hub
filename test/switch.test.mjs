@@ -224,3 +224,27 @@ test('the same account is never checked twice within 30 seconds, even on a force
   const r = run(sb, `let calls = 0; globalThis.fetch = async () => { calls++; return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }); }; import('./src/collector.mjs').then(async ({ refreshUsage }) => { await refreshUsage({ names: ['B'], maxAgeMs: 0 }); console.log(JSON.stringify({ calls })); });`);
   assert.equal(r.calls, 0);
 });
+
+// ── switch at chat boundaries: a new chat has no history to reread ──
+
+const CHAT = `import { switchAtChatStart } from './src/switcher.mjs'; const r = await switchAtChatStart(); console.log(JSON.stringify({ switched: !!r?.switched, to: r?.to || null }));`;
+const chatState = (sb, aFive, bFive, extra = {}) => fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { A: U(aFive, 20), B: U(bFive, 20) }, alerts: {}, ...extra }));
+
+test('new chat: switches early when the active session is past 90% and another account is clearly better', () => {
+  const sb = sandbox();
+  chatState(sb, 92, 10);
+  const r = run(sb, CHAT);
+  assert.equal(r.switched, true);
+  assert.equal(r.to, 'B');
+});
+
+test('new chat: no early switch below 90%, when the other account is not clearly better, or while held', () => {
+  let sb = sandbox(); chatState(sb, 70, 10);
+  assert.equal(run(sb, CHAT).switched, false, 'below 90%');
+  sb = sandbox(); chatState(sb, 92, 75);
+  assert.equal(run(sb, CHAT).switched, false, 'B not clearly better');
+  sb = sandbox(); chatState(sb, 92, 10, { forced: { name: 'A', at: Date.now() } });
+  assert.equal(run(sb, CHAT).switched, false, 'held account');
+  sb = sandbox(); chatState(sb, 92, 10, { lastSwitch: { from: 'B', to: 'A', at: Date.now() - 30e3, reason: 'test' } });
+  assert.equal(run(sb, CHAT).switched, false, 'just switched');
+});

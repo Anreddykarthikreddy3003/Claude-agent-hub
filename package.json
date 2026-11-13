@@ -1,6 +1,6 @@
 {
   "name": "claude-agent-hub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Run Claude Code, OpenAI Codex, Kimi, Hermes, OpenCode and Antigravity agents side by side from one IDE dashboard, with Claude as the orchestrator. Tracks every account's 5-hour and weekly usage and switches Claude Code accounts automatically.",
   "type": "module",
   "private": true,

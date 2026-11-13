@@ -170,6 +170,7 @@ Settings live in `%USERPROFILE%\.claude-accounts\config.json`. Most can be chang
 | `autoSwitch` | `true` | Move Claude Code to the best account when the active one runs out |
 | `monitoring` | `true` | Keep usage of every account current in the background |
 | `sessionSwitchAt` | `95` | Switch away at this 5-hour usage % |
+| `newChatSwitchAt` | `90` | When a new chat starts past this %, switch then (a new chat has nothing to reread) |
 | `weeklyStopAt` | `98` | Stop using an account at this weekly usage % |
 | `ready` | `false` | Session priming for Claude accounts (opt in) |
 | `primeCodex` | `false` | Session priming for Codex plans with a 5-hour window |

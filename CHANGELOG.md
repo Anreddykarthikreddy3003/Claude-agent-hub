@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-13
+
+### Added
+- Switching at chat boundaries: when a new chat starts and the active account is already past 90% of its 5-hour session (`newChatSwitchAt`), it moves to a clearly better account right away. A new chat has no history to reread on the other account, so this avoids a costlier switch in the middle of the next chat.
+- The switch notice now explains what a mid-chat switch means: the chat keeps its full history, but Claude's earlier private reasoning and the prompt cache stay with the old account, so the next reply rereads the chat once. It suggests `/compact` or a new chat in long sessions.
+
 ### Fixed
 - A Cloudflare challenge or outage page from Anthropic no longer marks an account as signed out, so an outage can't trigger needless account switches. Usage checks back off for 15 minutes instead.
 - The active account's saved login now stays current. Claude Code rotates the refresh token on every refresh; previously the saved copy could go stale and need a new sign-in.
@@ -27,5 +33,6 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/releases/tag/v1.0.0

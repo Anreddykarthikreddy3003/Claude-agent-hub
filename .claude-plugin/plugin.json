@@ -1,6 +1,6 @@
 {
   "name": "claude-agent-hub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Claude orchestrates Codex, Kimi, Hermes, OpenCode and Antigravity agents (debate, build and test, review) while you watch them live in the IDE. Tracks 5-hour and weekly usage for every account and switches Claude Code accounts automatically.",
   "author": { "name": "Claude Agent Hub contributors" },
   "homepage": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub",
