@@ -914,7 +914,10 @@ function activate(ctx) {
     const working = agents.filter((a) => a.status === 'working').length;
     const needs = agents.filter((a) => ['needs-login', 'error'].includes(a.status)).length;
     const parts = [];
-    if (act) parts.push(`${act.email ? act.email.split('@')[0] : act.name}  5h ${act.five.util}%  wk ${act.week.util}%`);
+    if (act) parts.push(`${act.email ? act.email.split('@')[0] : act.name}  5h ${act.five.util}%  wk ${act.week.util}%${acc.frozen === act.name ? '  $(lock)' : ''}`);
+    // No saved account active: still say which login Claude Code is using (open Home to save it or switch)
+    else if (acc?.mainSignedIn && acc.mainEmail) parts.push(`${acc.mainEmail.split('@')[0]} · not saved`);
+    else if (acc?.accounts?.length && acc.mainSignedIn === false) parts.push('Claude: not signed in');
     if (working) parts.push(`$(sync~spin) ${working}`);
     if (needs) parts.push(`$(bell) ${needs}`);
     item.text = `$(account) ${parts.join('   ') || 'Agent Hub'}`;

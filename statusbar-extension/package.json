@@ -3,7 +3,7 @@
   "displayName": "Agent Hub",
   "description": "Monitor and run Claude, Codex, Hermes, Kimi, OpenCode and Antigravity agents from one dashboard: account usage, live agent conversations, agent map, models and logs.",
   "publisher": "claude-agent-hub",
-  "version": "1.0.3",
+  "version": "1.0.6",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/Anreddykarthikreddy3003/Claude-agent-hub" },
   "keywords": ["claude", "claude code", "codex", "multi-agent", "ai agents", "usage limits"],

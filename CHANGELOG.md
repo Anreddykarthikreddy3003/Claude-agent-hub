@@ -4,6 +4,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-16
+
+### Fixed
+- The status bar said only "Agent Hub" when Claude Code was signed in to an account that is not saved here. It now shows that login ("name · not saved"), or "Claude: not signed in". A frozen account shows a lock icon.
+
 ## [1.0.5] - 2026-11-16
 
 ### Fixed
@@ -66,7 +71,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...v1.0.3
