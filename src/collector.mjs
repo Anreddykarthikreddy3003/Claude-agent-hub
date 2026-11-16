@@ -113,7 +113,10 @@ export async function refreshUsage({ names = null, maxAgeMs = 0 } = {}) {
     const resetPassed = [prev?.five?.resetsAt, prev?.week?.resetsAt].some((t) => t && t <= now && t > (prev?.attemptAt || 0));
     if (prev?.backoffUntil && prev.backoffUntil > now) continue;
     if (prev && now - (prev.attemptAt || 0) < MIN_GAP_MS && !resetPassed) continue;
-    if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed) continue;
+    // A check that failed for a temporary reason (network, outage, 429) is retried once its back-off ends,
+    // instead of waiting for the next regular check (30 min for idle accounts).
+    const retryFailed = !!prev?.error && !!prev.backoffUntil && prev.backoffUntil <= now;
+    if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed && !retryFailed) continue;
     results[acc.name] = await fetchOne(acc, prev);
   }
   if (Object.keys(results).length) {

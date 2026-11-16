@@ -4,6 +4,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-16
+
+### Fixed
+- A usage check that failed for a temporary reason (network, outage, rate limit) is retried as soon as its back-off ends (5 minutes), instead of at the next regular check (30 minutes for idle accounts).
+
 ## [1.0.4] - 2026-11-16
 
 ### Fixed
@@ -61,7 +66,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...v1.0.2

@@ -323,3 +323,15 @@ test('freeze survives "automatic switching off" being turned back on, and a froz
   assert.equal(r.switched, false);
   assert.equal(r.limited, false);
 });
+
+test('a usage check that failed for a temporary reason is retried when its back-off ends, not 30 minutes later', () => {
+  const count = (usageB) => {
+    const sb = sandbox();
+    fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { B: usageB }, alerts: {} }));
+    return run(sb, `let calls = 0; globalThis.fetch = async () => { calls++; return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }); }; import('./src/collector.mjs').then(async ({ refreshUsage }) => { await refreshUsage({ names: ['B'], maxAgeMs: 30 * 60e3 }); console.log(JSON.stringify({ calls })); });`).calls;
+  };
+  const t = Date.now();
+  assert.equal(count(U(10, 20, { attemptAt: t - 6 * 60e3, error: 'network error (ECONNRESET)', backoffUntil: t - 60e3 })), 1, 'back-off over: retry now');
+  assert.equal(count(U(10, 20, { attemptAt: t - 2 * 60e3, error: 'network error (ECONNRESET)', backoffUntil: t + 3 * 60e3 })), 0, 'still backing off');
+  assert.equal(count(U(10, 20, { attemptAt: t - 6 * 60e3 })), 0, 'healthy and recent: wait for the regular check');
+});
