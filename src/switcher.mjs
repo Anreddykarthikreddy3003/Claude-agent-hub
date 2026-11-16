@@ -61,6 +61,11 @@ export async function switchTo(target, reason = 'manual') {
   return withLock(FILES.opsLock, async () => {
     const acc = loadAccounts().find((a) => a.name === target);
     if (!acc) throw new Error(`No account named "${target}".`);
+    const frozen = loadState().frozen;
+    if (frozen && frozen.name !== target) {
+      const fa = loadAccounts().find((a) => a.name === frozen.name);
+      throw new Error(`${fa?.email || frozen.name} is frozen. Unfreeze it first to switch accounts.`);
+    }
     if (acc.paused) throw new Error(`"${target}" is paused. Resume it first.`);
     const tgtFile = readJsonStrict(slotCreds(target));
     if (!tgtFile?.claudeAiOauth) throw new Error(`"${target}" has no saved login. Run: /accounts relogin ${target}`);
@@ -146,6 +151,31 @@ export async function syncActiveSlot() {
 }
 
 /**
+ * Freeze: Claude Code stays on the active account, even past its limits, until unfreeze() is called.
+ * No automatic switch of any kind happens meanwhile (background, prompts, new chats, agents), and manual
+ * switches to other accounts are refused. A force-switch hold is replaced by the freeze.
+ */
+export async function freezeActive() {
+  const det = await detectActive({ force: true });
+  if (!det.name) throw new Error('Claude Code is not on one of your saved accounts, so there is nothing to freeze.');
+  await updateState((s) => { s.frozen = { name: det.name, at: Date.now() }; delete s.forced; });
+  appendLog('frozen', { name: det.name });
+  publishStatus();
+  return { frozen: det.name };
+}
+
+/** Unfreeze: automatic switching takes over again right away, following the usual plan. */
+export async function unfreeze() {
+  const was = loadState().frozen;
+  if (!was) return { unfrozen: null };
+  await updateState((s) => { delete s.frozen; });
+  appendLog('unfrozen', { name: was.name });
+  const r = await autoSwitchIfNeeded('unfrozen');
+  publishStatus();
+  return { unfrozen: was.name, switched: !!r?.switched, to: r?.to || null };
+}
+
+/**
  * Force-switch: use an account even though it is past the normal thresholds (e.g. 98% weekly).
  * It is then held until it reaches 100% (or becomes unusable); after that automatic switching resumes.
  */
@@ -176,7 +206,7 @@ export async function switchAtChatStart() {
   if (cfg.autoSwitch === false) return null;
   const { st, views, now } = snapshot();
   const active = st.active;
-  if (!active || st.forced?.name === active) return null;
+  if (st.frozen || !active || st.forced?.name === active) return null;
   if (st.lastSwitch?.at && now - st.lastSwitch.at < 2 * 60e3) return null;
   const av = views.find((v) => v.name === active);
   if (!av || av.status !== 'ok' || av.five.util < (cfg.newChatSwitchAt ?? 90)) return null;
@@ -197,6 +227,13 @@ export async function autoSwitchIfNeeded(source = 'auto') {
   if (!views.length) return null;
   // One "all limited" alert per episode: cleared as soon as any account is usable again.
   if (st.alerts?.['all-limited'] && rankViews(views).length) await updateState((s) => { delete s.alerts['all-limited']; });
+  // Frozen: stay, whatever the limits say, until the user unfreezes.
+  if (st.frozen) {
+    const fv = views.find((v) => v.name === st.frozen.name);
+    const limited = !!fv && fv.status !== 'ok';
+    const resumeAt = !fv ? null : fv.week.util >= 100 ? fv.week.resetsAt : fv.five.util >= 100 ? fv.five.resetsAt : null;
+    return { switched: false, frozen: true, name: st.frozen.name, email: fv?.email || null, limited, resumeAt };
+  }
   // Home-page switch: automatic switching off = keep the current account (alerts still fire)
   if (loadConfig().autoSwitch === false) return null;
   const active = st.active;

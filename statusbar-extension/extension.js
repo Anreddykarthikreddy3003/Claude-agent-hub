@@ -248,7 +248,7 @@ tr+tr td,tr+tr th{border-top:1px solid var(--sep)}
 .toast.err{box-shadow:0 6px 20px rgba(0,0,0,.28),inset 3px 0 0 var(--err)}
 ${compact ? '.list{width:100%;border-right:none}.split.has-sel .list{display:none}.split:not(.has-sel) .thread{display:none}.chips{display:none}.pmenu{width:100%;border-right:none}.acctwrap{flex-direction:column}.stats{grid-template-columns:1fr}.stats .st+.st::before{display:none}' : ''}
 </style></head><body>
-<header><span class="title">Claude Agent Hub</span><nav id="tabs"></nav><div class="chips" id="chips"></div></header>
+<header><span class="title">Agent Hub</span><nav id="tabs"></nav><div class="chips" id="chips"></div></header>
 <main id="main"><div class="empty">Connecting to the Agent Hub…</div></main><div class="toast" id="toast"></div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -333,6 +333,27 @@ function rings(five, week) {
   const ring = (r, util) => { const c = 2 * Math.PI * r; const v = Math.max(0, Math.min(100, util || 0)); return '<circle cx="50" cy="50" r="' + r + '" fill="none" style="stroke:var(--track)" stroke-width="9"/><circle cx="50" cy="50" r="' + r + '" fill="none" style="stroke:' + heat(v) + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + (c * v / 100).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 50 50)"/>'; };
   return '<svg class="rings" viewBox="0 0 100 100" width="108" height="108" role="img" aria-label="Weekly limit ' + week.util + ' percent used, 5-hour session ' + five.util + ' percent used">' + ring(41, week.util) + ring(27, five.util) + '</svg>';
 }
+/** Automation switches: one source for Home and Accounts → Claude Code, so both always show the same settings. */
+function automationBox(acc) {
+  const sw = (key, on, title, desc, o = {}) => '<div class="ci"><div class="grow"><div class="t">' + title + (o.disabled ? ' <span class="badge b-idle">' + (on ? 'Paused by the main switch' : 'Off') + '</span>' : '') + '</div><div class="d">' + desc + '</div></div>' +
+    '<label class="switch" title="Turn ' + (on ? 'off' : 'on') + '"><input type="checkbox" data-setting="' + key + '"' + (on ? ' checked' : '') + (o.disabled ? ' disabled' : '') + '><span></span></label></div>';
+  const locked = (title, why) => '<div class="ci"><div class="grow"><div class="t">' + title + ' <span class="badge b-idle">Not available</span></div><div class="d">' + why + '</div></div><label class="switch" title="Not available for this platform"><input type="checkbox" disabled><span></span></label></div>';
+  const pAll = acc?.primeAll !== false;
+  const codexHas5h = platAccounts('codex').some((a) => a.usage?.five);
+  const summary = !pAll ? 'Off on every platform.' : 'Claude ' + (acc?.ready ? 'on' : 'off') + ', Codex ' + (acc?.primeCodex ? 'on' : 'off') + '. Antigravity, Hermes, Kimi and OpenCode can’t be primed.';
+  return '<div class="box checklist">' +
+    sw('monitoring', acc?.monitoring !== false, 'Background monitoring', 'Keeps usage and sign-in status of every account current, every few minutes. When off, only the active Claude account is checked; use Refresh for the rest.') +
+    sw('autoSwitch', acc?.autoSwitch !== false, 'Automatic account switching' + (acc?.frozen ? ' <span class="badge b-info">Frozen on ' + esc(claudeLabel(acc.frozen)) + '</span>' : ''), acc?.frozen ? 'An account is frozen, so nothing switches until you unfreeze it. This setting applies again after that.' : 'When the active Claude account runs out, Claude Code moves to the best other account. When off, you switch by hand.') +
+    '<div class="ci disclose' + (S.primingOpen ? ' open' : '') + '" data-act="toggle-priming" role="button" tabindex="0" aria-expanded="' + (S.primingOpen ? 'true' : 'false') + '"><div class="grow"><div class="t">Session priming <span class="chev" aria-hidden="true">›</span></div><div class="d">' + summary + ' ' + (S.primingOpen ? 'Click to hide the platforms.' : 'Click to show each platform.') + '</div></div>' +
+    '<label class="switch" title="Main switch for every platform"><input type="checkbox" data-setting="primeAll"' + (pAll ? ' checked' : '') + '><span></span></label></div>' +
+    (S.primingOpen ? '<div class="nested">' +
+      sw('ready', !!acc?.ready, 'Claude', 'Starts each account’s 5-hour window as soon as the previous one ends: about 240 tokens per account every 5 hours.', { disabled: !pAll }) +
+      sw('primeCodex', !!acc?.primeCodex, 'Codex', codexHas5h ? 'Starts an idle 5-hour window, at most once per window: about 19k tokens, mostly cached.' : 'Works only on plans with a 5-hour window. Your Codex account has a weekly window only, so nothing would be sent.', { disabled: !pAll }) +
+      locked('Antigravity', 'Tested: a hi does not start Antigravity’s quota window, which only starts once real quota is used.') +
+      locked('Hermes, Kimi and OpenCode', 'These providers don’t publish a session window, so there is nothing to start early.') +
+      '</div>' : '') +
+    '</div>';
+}
 function renderHome() {
   const st = S.state; const acc = st.accounts; const agents = st.agents || [];
   const act = acc?.accounts?.find((a) => a.active);
@@ -345,8 +366,8 @@ function renderHome() {
     const ln = (label, w) => '<div class="ln"><i style="background:' + heat(w.util) + '"></i>' + label + ' <b>' + w.util + '%</b><span class="muted">' + (w.resetsAt ? 'resets in ' + dur(w.resetsAt - now) : 'no window running') + '</span></div>';
     const next = acc.next ? claudeLabel(acc.next.name) : null;
     h += '<div class="hero">' + rings(act.five, act.week) +
-      '<div class="who"><div class="k">' + (acc.forced === act.name ? 'Active Claude account, held until 100%' : 'Active Claude account') + '</div><div class="e" title="' + esc(act.email || act.name) + '">' + esc(act.email || act.name) + '</div>' +
-      ln('Weekly limit', act.week) + ln('5-hour session', act.five) + (next ? '<div class="ln muted">When it runs out, Claude Code moves to ' + esc(next) + '</div>' : '') + '</div>' +
+      '<div class="who"><div class="k">' + (acc.frozen === act.name ? 'Active Claude account, frozen' : acc.forced === act.name ? 'Active Claude account, held until 100%' : 'Active Claude account') + '</div><div class="e" title="' + esc(act.email || act.name) + '">' + esc(act.email || act.name) + '</div>' +
+      ln('Weekly limit', act.week) + ln('5-hour session', act.five) + (acc.frozen === act.name ? '<div class="ln muted">Frozen: Claude Code stays on this account, even at its limits, until you unfreeze it.</div>' : next ? '<div class="ln muted">When it runs out, Claude Code moves to ' + esc(next) + '</div>' : '') + '</div>' +
       '<div class="hero-acts"><button class="primary" data-act="new-from-home">Start an agent</button><button data-act="goto-plat" data-p="claude">Manage accounts</button></div></div>';
   } else {
     h += '<div class="hero"><div class="who"><div class="k">Claude account</div><div class="e">No account managed yet</div><div class="ln muted">Add your Claude accounts to see their limits here.</div></div><div class="hero-acts"><button class="primary" data-act="add-account" data-p="claude">Add a Claude account</button></div></div>';
@@ -357,24 +378,7 @@ function renderHome() {
     '<div class="st"><div class="v" style="color:' + (S.live ? 'var(--ok)' : 'var(--err)') + '">' + (S.live ? 'Service running' : 'Service offline') + '</div><div class="s">Monitoring ' + (acc?.monitoring === false ? 'off' : 'on') + ', switching ' + (acc?.autoSwitch === false ? 'off' : 'on') + '</div></div></div>';
   h += '<div class="quick"><button data-act="add-account" data-p="' + esc(S.acctPlat) + '">Add an account</button><button data-act="open-chat">Open Claude chat</button></div>';
 
-  const sw = (key, on, title, desc, o = {}) => '<div class="ci"><div class="grow"><div class="t">' + title + (o.disabled ? ' <span class="badge b-idle">' + (on ? 'Paused by the main switch' : 'Off') + '</span>' : '') + '</div><div class="d">' + desc + '</div></div>' +
-    '<label class="switch" title="Turn ' + (on ? 'off' : 'on') + '"><input type="checkbox" data-setting="' + key + '"' + (on ? ' checked' : '') + (o.disabled ? ' disabled' : '') + '><span></span></label></div>';
-  const locked = (title, why) => '<div class="ci"><div class="grow"><div class="t">' + title + ' <span class="badge b-idle">Not available</span></div><div class="d">' + why + '</div></div><label class="switch" title="Not available for this platform"><input type="checkbox" disabled><span></span></label></div>';
-  const pAll = acc?.primeAll !== false;
-  const codexHas5h = platAccounts('codex').some((a) => a.usage?.five);
-  const summary = !pAll ? 'Off on every platform.' : 'Claude ' + (acc?.ready ? 'on' : 'off') + ', Codex ' + (acc?.primeCodex ? 'on' : 'off') + '. Antigravity, Hermes, Kimi and OpenCode can’t be primed.';
-  h += '<h3>Automation</h3><div class="box checklist">' +
-    sw('monitoring', acc?.monitoring !== false, 'Background monitoring', 'Keeps usage and sign-in status of every account current, every few minutes. When off, only the active Claude account is checked; use Refresh for the rest.') +
-    sw('autoSwitch', acc?.autoSwitch !== false, 'Automatic account switching', 'When the active Claude account runs out, Claude Code moves to the best other account. When off, you switch by hand.') +
-    '<div class="ci disclose' + (S.primingOpen ? ' open' : '') + '" data-act="toggle-priming" role="button" tabindex="0" aria-expanded="' + (S.primingOpen ? 'true' : 'false') + '"><div class="grow"><div class="t">Session priming <span class="chev" aria-hidden="true">›</span></div><div class="d">' + summary + ' ' + (S.primingOpen ? 'Click to hide the platforms.' : 'Click to show each platform.') + '</div></div>' +
-    '<label class="switch" title="Main switch for every platform"><input type="checkbox" data-setting="primeAll"' + (pAll ? ' checked' : '') + '><span></span></label></div>' +
-    (S.primingOpen ? '<div class="nested">' +
-      sw('ready', !!acc?.ready, 'Claude', 'Starts each account’s 5-hour window as soon as the previous one ends: about 240 tokens per account every 5 hours.', { disabled: !pAll }) +
-      sw('primeCodex', !!acc?.primeCodex, 'Codex', codexHas5h ? 'Starts an idle 5-hour window, at most once per window: about 19k tokens, mostly cached.' : 'Works only on plans with a 5-hour window. Your Codex account has a weekly window only, so nothing would be sent.', { disabled: !pAll }) +
-      locked('Antigravity', 'Tested: a hi does not start Antigravity’s quota window, which only starts once real quota is used.') +
-      locked('Hermes, Kimi and OpenCode', 'These providers don’t publish a session window, so there is nothing to start early.') +
-      '</div>' : '') +
-    '</div>';
+  h += '<h3>Automation</h3>' + automationBox(acc);
 
   h += '<h3>Platforms</h3><div class="box checklist">';
   for (const p of PLAT_ORDER) {
@@ -408,8 +412,10 @@ function accountCard(p, a) {
   else if (a.warning) badge = '<span class="badge b-warn">Attention</span>';
   else badge = '<span class="badge b-ok">Signed in</span>';
   const live = a.claude ? a.live : p === 'agy' ? a.active : a.preferred;
-  const held = a.claude && a.live && S.state?.accounts?.forced === a.name;
-  const liveLabel = a.claude ? (held ? 'Active · held' : 'Active') : p === 'agy' ? 'Active' : 'Used for new agents';
+  const frozenName = a.claude ? S.state?.accounts?.frozen : null;
+  const frozen = !!frozenName && frozenName === a.name;
+  const held = a.claude && a.live && !frozen && S.state?.accounts?.forced === a.name;
+  const liveLabel = a.claude ? (frozen ? 'Active · frozen' : held ? 'Active · held' : 'Active') : p === 'agy' ? 'Active' : 'Used for new agents';
   const ident = a.email ? (a.plan || '') : (a.plan || (a.isDefaultHome ? 'your normal ' + PLAT[p][1] + ' login' : ''));
   let h = '<div class="acard' + (live ? ' live' : '') + '"><div class="h"><b title="' + esc(a.email || a.name) + '">' + esc(a.email || a.name) + '</b>' + (a.email ? '<span class="small muted" title="Saved as">' + esc(a.name) + '</span>' : '') + (live ? '<span class="badge b-info">' + liveLabel + '</span>' : '') + '<span style="margin-left:auto">' + badge + '</span></div>';
   if (ident) h += '<div class="id" title="' + esc(ident) + '">' + esc(ident) + '' + '</div>';
@@ -430,6 +436,7 @@ function accountCard(p, a) {
   }
   if (a.warning) h += '<div class="warnline">⚠ ' + esc(a.warning) + '</div>';
   if (held) h += '<div class="small" style="color:var(--info)">You force-switched here: it stays active until it reaches 100%, then automatic switching moves on.</div>';
+  if (frozen) h += '<div class="small" style="color:var(--info)">Frozen: Claude Code stays on this account, even at its limits, until you unfreeze it.</div>' + (a.status !== 'ok' ? '<div class="warnline">At its limit: replies wait for the reset. Unfreeze to let automatic switching move on.</div>' : '');
   if (a.limitedUntil) h += '<div class="warnline">Limited until ' + clock(a.limitedUntil) + '; agents use another account meanwhile</div>';
   const acts = [];
   if (!a.signedIn) acts.push('<button class="primary" data-act="relogin" data-p="' + p + '" data-n="' + esc(a.name) + '">Sign in</button>');
@@ -438,13 +445,17 @@ function accountCard(p, a) {
     acts.push('<button data-act="relogin" data-p="' + p + '" data-n="' + esc(a.name) + '">Sign in again</button>');
   }
   if (a.signedIn && !live && !a.paused) {
-    if (a.claude) acts.push(a.usable
+    if (a.claude && frozenName) acts.push('<button disabled title="' + esc(claudeLabel(frozenName)) + ' is frozen. Unfreeze it first to switch accounts.">' + (a.usable ? 'Switch to' : 'Force switch') + '</button>');
+    else if (a.claude) acts.push(a.usable
       ? '<button data-act="acct-activate" data-p="claude" data-n="' + esc(a.name) + '">Switch to</button>'
       : '<button data-act="acct-force" data-p="claude" data-n="' + esc(a.name) + '" title="Use this account anyway: it is kept until it reaches 100%, then automatic switching moves on">Force switch</button>');
     else if (p === 'agy') acts.push('<button data-act="acct-activate" data-p="agy" data-n="' + esc(a.name) + '">Make active</button>');
     else acts.push('<button data-act="acct-preferred" data-p="' + p + '" data-n="' + esc(a.name) + '">Use for new agents</button>');
   }
   if (held) acts.push('<button data-act="acct-release" title="Let automatic switching decide again now">Release hold</button>');
+  if (a.claude && live && a.signedIn) acts.push(frozen
+    ? '<button class="primary" data-act="acct-unfreeze" title="Let automatic switching move to other accounts again, following the plan">Unfreeze</button>'
+    : '<button data-act="acct-freeze" title="Use only this account, even past its limits, until you unfreeze it">Freeze</button>');
   acts.push('<button class="ghost" data-act="acct-pause" data-p="' + p + '" data-n="' + esc(a.name) + '" data-paused="' + (!a.paused) + '">' + (a.paused ? 'Resume' : 'Pause') + '</button>');
   if (!a.isDefaultHome) acts.push('<button class="ghost" data-act="acct-remove" data-p="' + p + '" data-n="' + esc(a.name) + '">Remove</button>');
   return h + '<div class="acts">' + acts.join('') + '</div></div>';
@@ -469,6 +480,7 @@ function renderAccounts() {
     opencode: 'Each account is a separate OpenCode data folder with its own provider logins.',
   }[p];
   body += '<div class="howto">' + how + (info?.login ? ' Sign-in command: <span class="mono">' + esc(info.login) + '</span>' : p === 'claude' ? ' Sign-in command: <span class="mono">claude auth login</span>' : '') + '</div>';
+  if (p === 'claude') body += '<h3>Automation</h3>' + automationBox(S.state?.accounts) + '<h3>Accounts</h3>';
   body += accts.length ? '<div class="acards">' + accts.map((a) => accountCard(p, a)).join('') + '</div>' : '<div class="box" style="padding:24px;text-align:center"><div style="margin-bottom:10px">No ' + PLAT[p][1] + ' accounts yet.</div><button class="primary" data-act="add-account" data-p="' + p + '">Sign in to your first account</button></div>';
   if (p === 'claude' && S.state?.accounts?.accounts?.length) {
     const d = S.state.accounts; const now = Date.now();
@@ -764,6 +776,8 @@ document.addEventListener('click', (e) => {
     case 'acct-preferred': return post({ cmd: 'acct-preferred', platform: t.dataset.p, name: t.dataset.n });
     case 'acct-force': return post({ cmd: 'acct-force', name: t.dataset.n });
     case 'acct-release': return post({ cmd: 'acct-release' });
+    case 'acct-freeze': return post({ cmd: 'acct-freeze' });
+    case 'acct-unfreeze': return post({ cmd: 'acct-unfreeze' });
     case 'acct-pause': return post({ cmd: 'acct-pause', platform: t.dataset.p, name: t.dataset.n, paused: t.dataset.paused === 'true' });
     case 'acct-remove': return post({ cmd: 'acct-remove', platform: t.dataset.p, name: t.dataset.n });
     case 'acct-test': S.testing[t.dataset.p + ':' + t.dataset.n] = true; render(); return post({ cmd: 'acct-test', platform: t.dataset.p, name: t.dataset.n });
@@ -1022,6 +1036,8 @@ function activate(ctx) {
           w.postMessage({ type: 'toast', text: `${r.changed ? 'Switched to' : 'Staying on'} ${a.email || m.name}: held until it reaches 100%.` });
           return refreshState();
         }
+        case 'acct-freeze': { const r = await api('POST', '/api/accounts/freeze'); w.postMessage({ type: 'toast', text: `Frozen: Claude Code stays on ${r?.frozen ?? 'this account'} until you unfreeze it.` }); return refreshState(); }
+        case 'acct-unfreeze': { const r = await api('POST', '/api/accounts/unfreeze'); w.postMessage({ type: 'toast', text: r?.switched ? `Unfrozen. Automatic switching moved Claude Code to ${r.to}.` : 'Unfrozen. Automatic switching decides again.' }); return refreshState(); }
         case 'acct-release': await api('POST', '/api/accounts/release-hold'); w.postMessage({ type: 'toast', text: 'Hold released: automatic switching decides again.' }); return refreshState();
         case 'acct-preferred': await api('POST', `/api/platform-accounts/${m.platform}/${encodeURIComponent(m.name)}/preferred`); w.postMessage({ type: 'toast', text: `New ${PLATFORM_LABEL[m.platform]} agents will use ${m.name}.` }); return refreshState();
         case 'acct-pause': await api('POST', `/api/platform-accounts/${m.platform}/${encodeURIComponent(m.name)}/pause`, { paused: m.paused }); return refreshState();
@@ -1105,7 +1121,7 @@ function activate(ctx) {
 
   async function openPanel(preserveFocus) {
     if (panel) { panel.reveal(undefined, preserveFocus); return; }
-    panel = vscode.window.createWebviewPanel('agentHub', 'Claude Agent Hub', { viewColumn: vscode.ViewColumn.Active, preserveFocus }, { enableScripts: true, retainContextWhenHidden: false });
+    panel = vscode.window.createWebviewPanel('agentHub', 'Agent Hub', { viewColumn: vscode.ViewColumn.Active, preserveFocus }, { enableScripts: true, retainContextWhenHidden: false });
     panel.iconPath = vscode.Uri.file(path.join(__dirname, 'media', 'icon.svg'));
     wire(panel.webview, false, (fn) => panel.onDidDispose(() => { fn(); panel = null; }));
     await new Promise((r) => setTimeout(r, 400));

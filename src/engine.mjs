@@ -115,20 +115,33 @@ export function nextAvailable(views, now) {
   return best;
 }
 
+/** Planner options from saved state: when each account became idle, and when the last "hi" went out. */
+export function primeOptions(st) {
+  const last = Object.values(st?.primes || {}).reduce((m, p) => Math.max(m, p?.lastAt || 0), 0);
+  return { idleSince: st?.idleSince || {}, lastPrimeAt: last || null };
+}
+
 /**
- * 24/7 priming plan. Accounts with a running 5h window are anchors; idle accounts get
- * a prime time so that all N windows reset evenly spaced, every 5h/N.
+ * 24/7 priming plan. Accounts with a running 5h window are anchors; idle accounts get a prime time so that all
+ * N windows reset evenly spaced, every 5h/N (one "slot", G).
+ *
+ * Fairness rules (an account must never be postponed forever as the slots shift):
+ *  - idle accounts queue in the order their windows ended (oldest first), after critical / waste-alarm ones;
+ *  - the k-th account in that queue waits at most (k + 1) slots after its window ended;
+ *  - consecutive "hi"s are at least min(15 min, G / 3) apart, so windows never all reset together.
  * Returns [{ name, at }] (at = epoch ms; at <= now means "send hi now").
  */
-export function planPrimes(views, now) {
+export function planPrimes(views, now, { idleSince = {}, lastPrimeAt = null } = {}) {
   const rotation = views.filter((v) => v.status === 'ok' || v.status === 'session-limit');
   const anchors = rotation.filter((v) => v.windowRunning).sort((a, b) => a.five.resetsAt - b.five.resetsAt);
+  const since = (v) => Math.min(idleSince[v.name] ?? now, now);
   const idle = rotation
     .filter((v) => !v.windowRunning)
     .sort(
       (a, b) =>
         b.critical - a.critical ||
         b.wasteAlarm - a.wasteAlarm ||
+        since(a) - since(b) ||
         inf(a.week.resetsAt) - inf(b.week.resetsAt) ||
         a.name.localeCompare(b.name),
     );
@@ -137,8 +150,21 @@ export function planPrimes(views, now) {
   const N = anchors.length + idle.length;
   const G = CYCLE / N;
   const tol = Math.min(15 * 60e3, G * 0.2);
+  const minGap = Math.min(15 * 60e3, G / 3);
+  // Bound and space the grid's choice: never later than (k + 1) slots after the window ended,
+  // never closer than minGap to the previous "hi".
+  const finish = (waits) => {
+    let prev = lastPrimeAt || null;
+    return idle.map((v, k) => {
+      const cap = Math.max(0, since(v) + (k + 1) * G - now);
+      let at = now + Math.round(Math.min(waits[k], cap));
+      if (prev != null) at = Math.max(at, prev + minGap);
+      prev = at;
+      return { name: v.name, at };
+    });
+  };
 
-  if (!anchors.length) return idle.map((v, k) => ({ name: v.name, at: now + Math.round(k * G) }));
+  if (!anchors.length) return finish(idle.map((v, k) => k * G));
 
   const ref = mod(anchors[0].five.resetsAt);
   const grid = Array.from({ length: N }, (_, k) => mod(ref + k * G));
@@ -156,7 +182,7 @@ export function planPrimes(views, now) {
       return w > CYCLE - tol ? 0 : w; // just missed the slot by a few minutes: go now
     })
     .sort((a, b) => a - b);
-  return idle.map((v, i) => ({ name: v.name, at: now + Math.round(waits[i]) }));
+  return finish(waits);
 }
 
 /**

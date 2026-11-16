@@ -45,6 +45,8 @@ export async function runHook(event) {
     const r = early?.switched ? early : await autoSwitchIfNeeded(event);
     publishStatus();
     if (r?.switched) return out({ systemMessage: switchedMsg(r, event) });
+    if (r?.frozen && (event === 'session-start' || r.limited))
+      return out({ systemMessage: `🧊 Frozen on ${r.email || r.name}${r.limited ? `: it is at its limit${r.resumeAt ? `, resets at ${fmtTime(r.resumeAt)}` : ''}` : ''}. Claude Code stays on it until you unfreeze (Agent Hub → Accounts).` });
     if (r?.allLimited)
       return out({ systemMessage: `⛔ All Claude accounts are limited. Next: ${label(r.next?.name)} at ${fmtTime(r.next?.at)}; the switch happens automatically.` });
     if (event === 'session-start') {

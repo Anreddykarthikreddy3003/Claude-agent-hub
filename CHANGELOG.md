@@ -4,6 +4,20 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-16
+
+### Added
+- **Freeze** on the active Claude account (Accounts tab, or `cam freeze` / `cam unfreeze`). Claude Code stays on that account, even past its limits, until you unfreeze it: no automatic switch of any kind, and switches to other accounts are refused. Unfreezing hands control back to automatic switching right away.
+- The Accounts tab (Claude Code) has the same Automation switches as Home (background monitoring, automatic switching, session priming), always in sync.
+
+### Fixed
+- Priming could postpone an account for hours: each re-plan pushed the account whose weekly limit resets last to the end of the queue, and a new account with no weekly window yet never got a "hi". Idle accounts are now served first come, first served, and the k-th in the queue waits at most k + 1 slots (5h / N) after its window ended.
+- After a "hi", the usage numbers can take a minute to show the new window; with idle accounts checked every 30 minutes, the same account could get a second "hi" 10 minutes later. The window is now re-checked before any repeat.
+- After a long sleep, "hi"s go out at least 15 minutes apart instead of all at once.
+
+### Changed
+- The dashboard is called "Agent Hub" again in the editor tab, header and Extensions view.
+
 ## [1.0.1] - 2026-11-13
 
 ### Added
@@ -33,6 +47,7 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/releases/tag/v1.0.0

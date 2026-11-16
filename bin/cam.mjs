@@ -15,6 +15,8 @@ Accounts (log in once per account):
 Everyday:
   cam status                       same as "cam accounts"
   cam switch [name] [--force]      switch now (no name = best); --force: use it past 95%/98% and hold it until 100%
+  cam freeze                       stay on the active account, even at its limits, until unfreeze
+  cam unfreeze                     end the freeze; automatic switching takes over again
   cam best                         ranked list of usable accounts
   cam week                         weekly-limit plan (is anything going to be wasted?)
   cam refresh                      fetch live usage for all accounts now
@@ -103,6 +105,18 @@ async function main() {
       return console.log(r.changed ? `Switched ${r.from ?? '(unmanaged)'} → ${r.to}. New chats use ${r.to}.` : `Already on ${r.to}.`);
     }
 
+    case 'freeze': {
+      const { freezeActive } = await import('../src/switcher.mjs');
+      const r = await freezeActive();
+      console.log(`Frozen on ${r.frozen}. Claude Code stays on it, even at its limits, until: cam unfreeze`);
+      break;
+    }
+    case 'unfreeze': {
+      const { unfreeze } = await import('../src/switcher.mjs');
+      const r = await unfreeze();
+      console.log(r.unfrozen ? `Unfrozen ${r.unfrozen}.${r.switched ? ` Switched to ${r.to} (automatic switching).` : ' Automatic switching decides again.'}` : 'Nothing was frozen.');
+      break;
+    }
     case 'best': {
       const { refreshUsage } = await import('../src/collector.mjs');
       await refreshUsage({ maxAgeMs: 60e3 });

@@ -7,7 +7,7 @@ import { loadConfig, loadState, updateState, appendLog } from './store.mjs';
 import { scanPendingSlots, detectActive } from './accounts.mjs';
 import { refreshUsage, snapshot, liveConfigDir, activeMaxAgeMs } from './collector.mjs';
 import { autoSwitchIfNeeded, retryPendingIdentity, syncActiveSlot } from './switcher.mjs';
-import { planPrimes } from './engine.mjs';
+import { planPrimes, primeOptions } from './engine.mjs';
 import { cliPrime } from './claude.mjs';
 import { notify } from './notify.mjs';
 import { publishStatus, statusJson } from './report.mjs';
@@ -30,10 +30,26 @@ export async function primeAccount(name) {
   return r;
 }
 
+/**
+ * Remember when each account's window ended (or when it was first seen idle), so the planner can serve
+ * accounts first come, first served. Accounts with a running window, paused or out of rotation drop out.
+ */
+async function trackIdle(views, st, now) {
+  const want = {};
+  for (const v of views) {
+    if (v.windowRunning || !(v.status === 'ok' || v.status === 'session-limit')) continue;
+    const ended = st.usage?.[v.name]?.five?.resetsAt;
+    want[v.name] = st.idleSince?.[v.name] ?? (ended && ended <= now ? ended : now);
+  }
+  if (JSON.stringify(want) !== JSON.stringify(st.idleSince || {})) await updateState((s) => { s.idleSince = want; });
+  return want;
+}
+
 export async function runDuePrimes() {
-  const { cfg, st, views, now } = snapshot();
+  let { cfg, st, views, now } = snapshot();
   const on = cfg.ready && cfg.primeAll !== false;
-  const plan = on ? planPrimes(views, now) : [];
+  const idleSince = await trackIdle(views, st, now);
+  const plan = on ? planPrimes(views, now, { ...primeOptions(st), idleSince }) : [];
   await updateState((s) => { s.plan = plan; });
   if (!on) return [];
   const done = [];
@@ -42,6 +58,14 @@ export async function runDuePrimes() {
     const last = st.primes?.[p.name];
     if (last?.lastAt && now - last.lastAt < 10 * 60e3) continue; // give the new window time to show up
     if (last?.fails >= 3 && now - last.lastAt < 60 * 60e3) continue; // back off after repeated failures
+    // Anthropic's usage numbers can lag a "hi" by a minute or more, and idle accounts are only re-checked every
+    // 30 min. Before sending another "hi" to a recently primed account, look again: its window may be running.
+    const u = st.usage?.[p.name];
+    if (last?.ok && now - last.lastAt < 60 * 60e3 && !((u?.attemptAt || 0) > last.lastAt + 60e3)) {
+      await refreshUsage({ names: [p.name] });
+      ({ st, views, now } = snapshot());
+      if (views.find((v) => v.name === p.name)?.windowRunning) continue;
+    }
     const r = await primeAccount(p.name);
     done.push({ name: p.name, ok: r.ok });
   }

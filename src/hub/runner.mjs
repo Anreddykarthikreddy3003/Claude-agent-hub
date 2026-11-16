@@ -218,6 +218,10 @@ async function handleLimit(a, message, why) {
       appendEvent(a.id, { kind: 'system', text: `Claude limit reached. Switched account ${r.from ?? '?'} → ${r.to}. Continuing the same session.` });
       return runTurn(a.id, cont, { retry: 1 });
     }
+    if (r?.frozen) {
+      const fat = r.resumeAt && r.resumeAt > Date.now() ? r.resumeAt + 60e3 : Date.now() + 30 * 60e3;
+      return finishStatus(a, 'waiting', `Claude is frozen on ${r.email || r.name}, which is at its limit. Resumes automatically at ${fmtTime(fat)}, or sooner if you unfreeze.`, { waitingUntil: fat, pending: { text: cont }, lastError: why });
+    }
     const at = r?.next?.at && r.next.at > Date.now() ? r.next.at + 60e3 : Date.now() + 30 * 60e3;
     return finishStatus(a, 'waiting', `All Claude accounts are limited. Resumes automatically at ${fmtTime(at)}.`, { waitingUntil: at, pending: { text: cont }, lastError: why });
   }

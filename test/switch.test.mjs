@@ -248,3 +248,78 @@ test('new chat: no early switch below 90%, when the other account is not clearly
   sb = sandbox(); chatState(sb, 92, 10, { lastSwitch: { from: 'B', to: 'A', at: Date.now() - 30e3, reason: 'test' } });
   assert.equal(run(sb, CHAT).switched, false, 'just switched');
 });
+
+// ── priming loop: no second "hi" while Anthropic's numbers lag the first one ──
+
+function primeSandbox(fiveAfterRefresh) {
+  const sb = sandbox();
+  const now = Date.now();
+  // Node stands in for the Claude CLI: if a "hi" is attempted it fails at once and is logged, nothing is sent.
+  fs.writeFileSync(path.join(sb.data, 'config.json'), JSON.stringify({ ready: true, notifications: false, claudePath: process.execPath }));
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({
+    active: 'A',
+    usage: { A: U(30, 20), B: { attemptAt: now - 15 * 60e3 - 10e3, fetchedAt: now - 15 * 60e3 - 10e3, five: { util: 0, resetsAt: null }, week: { util: 10, resetsAt: now + 48 * 3600e3 }, stale: false, error: null, needsLogin: false } },
+    primes: { B: { lastAt: now - 15 * 60e3, ok: true, fails: 0 } },
+    idleSince: { B: now - 6 * 3600e3 },
+    alerts: {},
+  }));
+  const usage = JSON.stringify({ five_hour: fiveAfterRefresh, seven_day: { utilization: 10, resets_at: new Date(now + 48 * 3600e3).toISOString() } });
+  const code = `globalThis.fetch = async () => new Response(${JSON.stringify(usage)}, { status: 200, headers: { 'content-type': 'application/json' } });
+    const { runDuePrimes } = await import('./src/daemon.mjs'); await runDuePrimes();
+    const fs = await import('node:fs'); const log = fs.existsSync(process.env.CAM_HOME + '/log.jsonl') ? fs.readFileSync(process.env.CAM_HOME + '/log.jsonl', 'utf8') : '';
+    console.log(JSON.stringify({ primes: log.split(String.fromCharCode(10)).filter((l) => l.includes('"type":"prime"')).length }));`;
+  return run(sb, code);
+}
+
+test('a recently primed account whose window now shows up is not primed again', () => {
+  const r = primeSandbox({ utilization: 1, resets_at: new Date(Date.now() + 4.7 * 3600e3).toISOString() });
+  assert.equal(r.primes, 0);
+});
+
+test('a recently primed account whose window still does not show up does get another hi', () => {
+  const r = primeSandbox({ utilization: 0, resets_at: null });
+  assert.equal(r.primes, 1, 'the retry path still works');
+});
+
+// ── freeze: stay on the active account until the user unfreezes ──
+
+const FRZ = `import * as sw from './src/switcher.mjs'; const fs = await import('node:fs');
+  const st = () => JSON.parse(fs.readFileSync(process.env.CAM_HOME + '/state.json', 'utf8'));`;
+
+test('freeze: stays on the account even at 100%, refuses manual switches and new-chat switches', () => {
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { A: U(100, 40), B: U(5, 20) }, alerts: {}, forced: { name: 'A', at: Date.now() } }));
+  const r = run(sb, `${FRZ}
+    const f = await sw.freezeActive();
+    const auto = await sw.autoSwitchIfNeeded('background');
+    const chat = await sw.switchAtChatStart();
+    let manual = null; try { await sw.switchTo('B', 'manual (dashboard)'); manual = 'switched'; } catch (e) { manual = e.message; }
+    console.log(JSON.stringify({ f: f.frozen, auto, chat, manual, active: st().active, frozen: st().frozen?.name, forced: st().forced || null }));`);
+  assert.equal(r.f, 'A');
+  assert.equal(r.auto.switched, false);
+  assert.equal(r.auto.frozen, true);
+  assert.equal(r.auto.limited, true, 'reports that the frozen account is at its limit');
+  assert.equal(r.chat, null);
+  assert.match(r.manual, /frozen/);
+  assert.equal(r.active, 'A');
+  assert.equal(r.frozen, 'A');
+  assert.equal(r.forced, null, 'a force hold is replaced by the freeze');
+});
+
+test('unfreeze: automatic switching takes over again right away', () => {
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { A: U(100, 40), B: U(5, 20) }, alerts: {}, frozen: { name: 'A', at: Date.now() } }));
+  const r = run(sb, `${FRZ} const u = await sw.unfreeze(); console.log(JSON.stringify({ ...u, active: st().active, frozen: st().frozen || null }));`);
+  assert.equal(r.unfrozen, 'A');
+  assert.equal(r.switched, true);
+  assert.equal(r.active, 'B');
+  assert.equal(r.frozen, null);
+});
+
+test('freeze survives "automatic switching off" being turned back on, and a frozen healthy account is simply kept', () => {
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { A: U(40, 40), B: U(5, 20) }, alerts: {}, frozen: { name: 'A', at: Date.now() } }));
+  const r = run(sb, `${FRZ} const a = await sw.autoSwitchIfNeeded('prompt'); console.log(JSON.stringify(a));`);
+  assert.equal(r.switched, false);
+  assert.equal(r.limited, false);
+});

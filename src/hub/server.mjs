@@ -147,6 +147,8 @@ const routes = [
   // Force-switch to a Claude account past its thresholds; it is held until 100% (then auto-switching resumes)
   ['POST', /^\/api\/platform-accounts\/claude\/([^/]+)\/force$/, async ([, n]) => (await import('../switcher.mjs')).forceSwitch(decodeURIComponent(n))],
   ['POST', /^\/api\/accounts\/release-hold$/, async () => (await import('../switcher.mjs')).releaseForced()],
+  ['POST', /^\/api\/accounts\/freeze$/, async () => (await import('../switcher.mjs')).freezeActive()],
+  ['POST', /^\/api\/accounts\/unfreeze$/, async () => (await import('../switcher.mjs')).unfreeze()],
   // Home-page switches: { ready?: bool, autoSwitch?: bool }
   ['POST', /^\/api\/settings$/, (_m, _q, b) => {
     const patch = {};

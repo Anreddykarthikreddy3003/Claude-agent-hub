@@ -55,6 +55,7 @@ Claude Agent Hub makes **your Claude Code chat the master**. You describe the se
 **Usage limits and accounts**
 - Tracks the **5-hour session and weekly limit** of every Claude account, with exact reset times (the same numbers `/usage` shows), plus Codex and Antigravity quotas.
 - If you have more than one Claude account (for example personal and work), Claude Code can move to the best one automatically when the active one runs out, or you can switch, hold or pause an account by hand.
+- **Freeze** the active account to stay on it, even past its limits, until you unfreeze it; nothing switches in between.
 - A weekly plan shows how much of each account is left before it resets.
 
 <table>
@@ -150,6 +151,7 @@ Plugin commands can also be typed with the plugin prefix, for example `/claude-a
 ```text
 cam accounts                     all accounts, usage, resets, next switch
 cam switch [name] [--force]      switch now; --force holds an account until it reaches 100%
+cam freeze | cam unfreeze        stay on the active account until you unfreeze
 cam week                         weekly plan
 cam refresh                      fetch live usage now
 cam log [n]                      recent switches, primes and alerts

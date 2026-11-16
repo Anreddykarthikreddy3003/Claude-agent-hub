@@ -1,6 +1,6 @@
 /** Human-readable output for the CLI, slash commands, status line and MCP tools. */
 import { snapshot } from './collector.mjs';
-import { rankViews, whyBest, nextAvailable, planPrimes } from './engine.mjs';
+import { rankViews, whyBest, nextAvailable, planPrimes, primeOptions } from './engine.mjs';
 import { fmtDur, fmtTime, pad, writeJsonAtomic } from './util.mjs';
 import { FILES } from './paths.mjs';
 import { readLog } from './store.mjs';
@@ -50,7 +50,7 @@ export function statusText() {
     out.push(n ? `No other account available now. Next: ${n.name} at ${fmtTime(n.at)}.` : 'No other account available.');
   }
   if (cfg.ready) {
-    const plan = planPrimes(views, now);
+    const plan = planPrimes(views, now, primeOptions(st));
     if (plan.length) out.push(`Next "hi": ${plan.map((p) => `${p.name} ${p.at <= now + 60e3 ? 'now' : fmtTime(p.at)}`).join(' · ')}`);
     else out.push('Next "hi": all 5h windows already running.');
   }
@@ -81,6 +81,7 @@ export function statusJson() {
     ready: cfg.ready,
     autoSwitch: cfg.autoSwitch !== false,
     forced: st.forced?.name || null,
+    frozen: st.frozen?.name || null,
     monitoring: cfg.monitoring !== false,
     primeAll: cfg.primeAll !== false,
     primeCodex: !!cfg.primeCodex,
@@ -109,7 +110,7 @@ export function statusJson() {
     })),
     next: best ? { name: best.name, why: whyBest(best) } : null,
     nextAvailable: best ? null : nextAvailable(others, now),
-    primes: cfg.ready ? planPrimes(views, now) : [],
+    primes: cfg.ready ? planPrimes(views, now, primeOptions(st)) : [],
     lastSwitch: st.lastSwitch || null,
   };
 }
