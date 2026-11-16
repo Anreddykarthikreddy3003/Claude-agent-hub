@@ -156,6 +156,7 @@ cam week                         weekly plan
 cam refresh                      fetch live usage now
 cam log [n]                      recent switches, primes and alerts
 cam doctor                       check that everything works
+cam diagnose                     full troubleshooting report to share (emails shortened, no tokens)
 cam uninstall [--purge]          remove everything (--purge also deletes saved logins)
 ```
 

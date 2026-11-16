@@ -23,11 +23,11 @@ async function identify(oauth, configDir) {
     oauth = readOauth(configDir ? path.join(configDir, '.credentials.json') : MAIN_CREDS) || oauth;
   }
   try {
-    return await fetchProfile(oauth.accessToken);
+    return { ...(await fetchProfile(oauth.accessToken)), verified: true };
   } catch {
     const st = readJson(configDir ? path.join(configDir, '.claude.json') : MAIN_STATE, {});
     const oa = st?.oauthAccount;
-    return oa ? { uuid: oa.accountUuid, email: oa.emailAddress } : null;
+    return oa ? { uuid: oa.accountUuid, email: oa.emailAddress, verified: false } : null;
   }
 }
 
@@ -101,6 +101,16 @@ export async function importCurrent(name) {
   if (!main?.claudeAiOauth) throw new Error('Claude Code is not logged in. Log in first, or use "accounts add".');
   const id = await identify(main.claudeAiOauth, null);
   if (!id?.uuid) throw new Error('Could not identify the current login (network?). Try again.');
+  // Already saved under another name? Then this is that account signed in again: refresh its saved login
+  // instead of creating a duplicate. Only with an identity verified by Anthropic, never from local metadata.
+  const existing = loadAccounts().find((a) => a.uuid && a.uuid === id.uuid);
+  if (existing) {
+    if (!id.verified) throw new Error('Could not verify the current login with Anthropic (network). Try again in a minute.');
+    writeJsonAtomic(slotCreds(existing.name), { ...(readJson(slotCreds(existing.name), {}) || {}), claudeAiOauth: main.claudeAiOauth });
+    await updateState((s) => { s.mainOwner = { tokenHash: tokenHash(main.claudeAiOauth), uuid: existing.uuid, email: existing.email, checkedAt: Date.now(), trusted: true, source: 'import' }; s.active = existing.name; });
+    appendLog('account-relinked', { name: existing.name });
+    return { ...id, name: existing.name, existing: true };
+  }
   fs.mkdirSync(slotDir(name), { recursive: true });
   writeJsonAtomic(slotCreds(name), { claudeAiOauth: main.claudeAiOauth });
   const oa = readJson(MAIN_STATE, {})?.oauthAccount;

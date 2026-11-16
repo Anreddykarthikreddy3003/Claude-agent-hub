@@ -184,6 +184,17 @@ export async function doctor() {
   const fc = findClaude();
   const netr = await checkNetwork();
   ok(netr.ok, 'Network: api.anthropic.com', netr.ok ? (netr.via === 'fetch' ? 'reachable' : `reachable through the fallback (${netr.via}); Node's own fetch failed with ${netr.firstError}`) : netr.error);
+  const fam = (r) => `${r.ok}/${r.tries} ok${r.error && r.ok < r.tries ? ` (${r.error})` : ''}`;
+  if (netr.ipv4) {
+    const all = (r) => r.ok === r.tries;
+    const verdict =
+      [netr.ipv4, netr.ipv6, netr.small, netr.normal].every(all) ? 'all connection types work' :
+      all(netr.small) && !all(netr.normal) ? 'large handshake packets are being dropped on this computer (adapter, driver or a filter); the small handshake is used automatically' :
+      all(netr.ipv4) && !all(netr.ipv6) ? 'IPv6 connections fail on this computer; IPv4 is used automatically' :
+      'connections are reset at random, whatever the type: most likely Windows Defender network inspection or the network adapter on this computer';
+    out.push(`ℹ  Connection tests (3 each) — IPv4: ${fam(netr.ipv4)} · IPv6: ${fam(netr.ipv6)} · normal handshake: ${fam(netr.normal)} · small handshake: ${fam(netr.small)}`);
+    out.push(`ℹ  → ${verdict}`);
+  }
   ok(fc.path !== 'claude' || process.platform !== 'win32', 'Claude CLI', fc.path !== 'claude' ? `${fc.path} (${fc.source})` : 'not found: install Claude Code (claude.ai/download) or its VS Code / Antigravity extension');
   ok(!!readJson(MAIN_CREDS, null)?.claudeAiOauth, 'Claude Code is logged in');
   const accounts = loadAccounts();

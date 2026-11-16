@@ -4,6 +4,16 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-16
+
+### Added
+- `cam diagnose`: one troubleshooting report (versions, doctor, account state, a connection test of every variant, Windows network and Defender settings, proxy settings, extensions, recent log). Emails are shortened and no tokens are printed; it is also saved to ~/.claude-accounts/diagnose.txt.
+- cam doctor tests the connection to Anthropic by type (IPv4, IPv6, normal and small handshake) and says which one fails.
+
+### Fixed
+- Computers whose connection to Anthropic is reset part of the time while the same network works elsewhere: after a failed request the service now also tries IPv4 and a small classic handshake, and keeps using whichever works.
+- "Save this account" on a login that is already saved under another name no longer creates a duplicate: it updates that account's saved sign-in. Without an identity verified by Anthropic it refuses instead of guessing.
+
 ## [1.0.6] - 2026-11-16
 
 ### Fixed
@@ -71,7 +81,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...v1.0.4

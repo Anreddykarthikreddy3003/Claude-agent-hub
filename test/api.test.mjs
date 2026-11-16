@@ -1,7 +1,7 @@
 /** Network resilience: when Node's fetch fails (antivirus HTTPS scanning, proxy, firewall), say why and retry. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchUsage, net, networkError, checkNetwork } from '../src/api.mjs';
+import { fetchUsage, net, networkError, checkNetwork, resetNetworkMemory } from '../src/api.mjs';
 
 const usageBody = { five_hour: { utilization: 42, resets_at: '2030-01-01T00:00:00Z' }, seven_day: { utilization: 7, resets_at: '2030-01-05T00:00:00Z' } };
 const okRes = (body) => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => body });
@@ -42,5 +42,25 @@ test('cam doctor network check reports which path worked', async () => {
     assert.equal(r.ok, true);
     assert.match(r.via, /system certificates/);
     assert.match(r.firstError, /UNABLE_TO_VERIFY_LEAF_SIGNATURE/);
+  } finally { [globalThis.fetch, net.httpsGet] = saved; }
+});
+
+test('large-handshake resets: the small-handshake variant is tried and remembered', async () => {
+  resetNetworkMemory();
+  const saved = [globalThis.fetch, net.httpsGet];
+  const seen = [];
+  globalThis.fetch = fetchFailed('ECONNRESET');
+  net.httpsGet = async (u, h, t, family, opts = {}) => {
+    seen.push(`${family}${opts.small ? '+small' : ''}`);
+    if (!opts.small) throw Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+    return okRes(usageBody);
+  };
+  try {
+    const u = await fetchUsage('t');
+    assert.equal(u.five.util, 42);
+    assert.deepEqual(seen, ['4', '0+small'], 'IPv4 first, then the small handshake');
+    seen.length = 0;
+    await fetchUsage('t');
+    assert.deepEqual(seen, ['0+small'], 'next time the working variant goes first, without waiting for fetch');
   } finally { [globalThis.fetch, net.httpsGet] = saved; }
 });

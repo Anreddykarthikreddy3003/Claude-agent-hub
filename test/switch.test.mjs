@@ -335,3 +335,29 @@ test('a usage check that failed for a temporary reason is retried when its back-
   assert.equal(count(U(10, 20, { attemptAt: t - 2 * 60e3, error: 'network error (ECONNRESET)', backoffUntil: t + 3 * 60e3 })), 0, 'still backing off');
   assert.equal(count(U(10, 20, { attemptAt: t - 6 * 60e3 })), 0, 'healthy and recent: wait for the regular check');
 });
+
+// ── "Save this account" for a login that is already saved under another name ──
+
+const IMPORT = `import { importCurrent } from './src/accounts.mjs'; const fs = await import('node:fs');
+  let r; try { r = await importCurrent('3'); } catch (e) { r = { error: e.message }; }
+  const accts = JSON.parse(fs.readFileSync(process.env.CAM_HOME + '/accounts.json', 'utf8')).accounts.map((a) => a.name);
+  console.log(JSON.stringify({ ...r, accts }));`;
+
+test('saving a login that belongs to an already saved account updates that account instead of duplicating it', () => {
+  const sb = sandbox({ mainCreds: { ...tok('B2') }, mainMeta: oa('B') }); // Claude Code signed in to B again (new tokens)
+  const r = run(sb, `globalThis.fetch = async () => new Response(JSON.stringify({ account: { uuid: 'uuid-B', email: 'b@example.com' } }), { status: 200, headers: { 'content-type': 'application/json' } });` + IMPORT);
+  assert.equal(r.existing, true, JSON.stringify(r));
+  assert.equal(r.name, 'B');
+  assert.deepEqual(r.accts, ['A', 'B'], 'no account "3" was created');
+  assert.equal(read(path.join(sb.data, 'slots', 'B', '.credentials.json')).claudeAiOauth.refreshToken, 'rt-B2', "B's saved login now holds the live tokens");
+  assert.equal(read(path.join(sb.data, 'state.json')).active, 'B');
+});
+
+test('saving an already saved account without a verified identity (network down) is refused, nothing changes', () => {
+  const sb = sandbox({ mainCreds: { ...tok('B2') }, mainMeta: oa('B') });
+  const before = fs.readFileSync(path.join(sb.data, 'slots', 'B', '.credentials.json'), 'utf8');
+  const r = run(sb, `globalThis.fetch = async () => { throw new TypeError('fetch failed'); }; (await import('./src/api.mjs')).net.httpsGet = async () => { throw Object.assign(new Error('reset'), { code: 'ECONNRESET' }); };` + IMPORT);
+  assert.match(r.error, /verify/);
+  assert.deepEqual(r.accts, ['A', 'B']);
+  assert.equal(fs.readFileSync(path.join(sb.data, 'slots', 'B', '.credentials.json'), 'utf8'), before);
+});

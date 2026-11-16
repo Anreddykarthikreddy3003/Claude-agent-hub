@@ -38,14 +38,21 @@ function tunnel(proxy, host, timeoutMs) {
   });
 }
 
-async function httpsGet(url, headers, timeoutMs) {
+/** Classic key exchange only: keeps the opening packet small enough for one network packet. */
+const SMALL_HELLO = 'X25519:P-256:P-384';
+
+async function httpsGet(url, headers, timeoutMs, family = 0, { small = false } = {}) {
   const u = new URL(url);
   const proxy = proxyFor(u.hostname);
   const socket = proxy ? await tunnel(proxy, u.hostname, timeoutMs) : null;
+  const curve = small ? { ecdhCurve: SMALL_HELLO } : {};
   return new Promise((resolve, reject) => {
     const req = https.request({
       host: u.hostname, port: 443, path: u.pathname + u.search, method: 'GET', headers, ca: caBundle(), servername: u.hostname, timeout: timeoutMs,
-      ...(socket ? { createConnection: () => tls.connect({ socket, servername: u.hostname, ca: caBundle() }) } : {}),
+      agent: false, // a fresh connection every time: a reused one would hide which variant works
+      ...curve,
+      ...(family && !socket ? { family } : {}),
+      ...(socket ? { createConnection: () => tls.connect({ socket, servername: u.hostname, ca: caBundle(), ...curve }) } : {}),
     }, (res) => {
       let body = '';
       res.setEncoding('utf8');
@@ -81,27 +88,64 @@ export function networkError(e) {
   return err;
 }
 
-async function request(url, headers, timeoutMs) {
+// On some computers the encrypted connection gets reset part of the time while the same network works for
+// others: a network adapter or driver, or a local filter, that mishandles IPv6 or the large opening packet
+// newer OpenSSL sends (its post-quantum key share). The fallback tries variants that avoid each of those,
+// and whichever works is used first for the next hour in this process.
+const VARIANTS = [
+  { via: 'IPv4', family: 4 },
+  { via: 'small handshake', family: 0, small: true },
+  { via: 'IPv4, small handshake', family: 4, small: true },
+  { via: 'any address', family: 0 },
+];
+let preferred = null; // { variant, until }
+/** Forget which variant worked (tests start from a clean slate). */
+export function resetNetworkMemory() { preferred = null; }
+
+const attempt = (url, headers, timeoutMs, v) => net.httpsGet(url, headers, Math.min(timeoutMs, 6000), v.family, { small: !!v.small });
+
+async function request(url, headers, timeoutMs, { probe = false } = {}) {
+  const errors = [];
+  if (!probe && preferred?.until > Date.now()) {
+    try { return { res: await attempt(url, headers, timeoutMs, preferred.variant), via: preferred.variant.via }; } catch (e) { errors.push(e); preferred = null; }
+  }
   try {
     return { res: await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) }), via: 'fetch' };
-  } catch (first) {
-    // fetch failed before any HTTP answer: try again with the system's certificates and any proxy
+  } catch (e) { errors.push(e); }
+  const first = errors[errors.length - 1];
+  // fetch failed before any HTTP answer: try the variants (all with the system's certificates and any proxy)
+  for (const v of VARIANTS) {
     try {
-      return { res: await net.httpsGet(url, headers, timeoutMs), via: 'system certificates / proxy', first };
-    } catch (second) {
-      throw networkError(second?.code || second?.cause ? second : first);
-    }
+      const res = await attempt(url, headers, timeoutMs, v);
+      preferred = { variant: v, until: Date.now() + 3600e3 };
+      return { res, via: `${v.via}, system certificates / proxy`, first };
+    } catch (e) { errors.push(e); }
   }
+  const named = [...errors].reverse().find((e) => e?.code || e?.cause?.code) || errors[0];
+  throw networkError(named);
+}
+
+/** Try one connection variant a few times directly (no fetch), to tell the causes apart in cam doctor. */
+async function probe(family, small = false, tries = 3) {
+  let ok = 0;
+  let error = null;
+  for (let i = 0; i < tries; i++) {
+    try { await net.httpsGet(API + '/api/oauth/usage', { 'User-Agent': 'claude-agent-hub/1.0' }, 6000, family, { small }); ok++; } catch (e) { error = e?.code || e?.message || 'error'; }
+  }
+  return { ok, tries, error };
 }
 
 /** One unauthenticated request: can this computer reach Anthropic at all, and how? (for cam doctor) */
-export async function checkNetwork(timeoutMs = 10000) {
+export async function checkNetwork(timeoutMs = 10000, { families = true } = {}) {
+  let out;
   try {
-    const { res, via, first } = await request(API + '/api/oauth/usage', { 'User-Agent': 'claude-agent-hub/1.0' }, timeoutMs);
-    return { ok: true, status: res.status, via, firstError: first ? networkError(first).message : null };
+    const { res, via, first } = await request(API + '/api/oauth/usage', { 'User-Agent': 'claude-agent-hub/1.0' }, timeoutMs, { probe: true });
+    out = { ok: true, status: res.status, via, firstError: first ? networkError(first).message : null };
   } catch (e) {
-    return { ok: false, error: e.message };
+    out = { ok: false, error: e.message };
   }
+  if (families) { out.ipv4 = await probe(4); out.ipv6 = await probe(6); out.small = await probe(0, true); out.normal = await probe(0, false); }
+  return out;
 }
 
 async function get(pathname, token, timeoutMs = 10000) {

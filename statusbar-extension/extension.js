@@ -1050,7 +1050,7 @@ function activate(ctx) {
           w.postMessage({ type: 'toast', text: `${r.changed ? 'Switched to' : 'Staying on'} ${a.email || m.name}: held until it reaches 100%.` });
           return refreshState();
         }
-        case 'import-current': { const r = await api('POST', '/api/accounts/import-current'); w.postMessage({ type: 'toast', text: `Saved ${r?.email || 'the current login'}. It is now part of your accounts.` }); return refreshState(); }
+        case 'import-current': { const r = await api('POST', '/api/accounts/import-current'); w.postMessage({ type: 'toast', text: r?.existing ? `This login is your saved account ${r.email || r.name}. Its saved sign-in was updated; no duplicate was created.` : `Saved ${r?.email || 'the current login'}. It is now part of your accounts.` }); return refreshState(); }
         case 'acct-freeze': { const r = await api('POST', '/api/accounts/freeze'); w.postMessage({ type: 'toast', text: `Frozen: Claude Code stays on ${r?.frozen ?? 'this account'} until you unfreeze it.` }); return refreshState(); }
         case 'acct-unfreeze': { const r = await api('POST', '/api/accounts/unfreeze'); w.postMessage({ type: 'toast', text: r?.switched ? `Unfrozen. Automatic switching moved Claude Code to ${r.to}.` : 'Unfrozen. Automatic switching decides again.' }); return refreshState(); }
         case 'acct-release': await api('POST', '/api/accounts/release-hold'); w.postMessage({ type: 'toast', text: 'Hold released: automatic switching decides again.' }); return refreshState();

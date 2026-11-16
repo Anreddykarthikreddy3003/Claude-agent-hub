@@ -29,6 +29,7 @@ Setup:
   cam uninstall [--purge]          remove everything (--purge also deletes saved logins)
   cam keep-awake on|off            stop the laptop sleeping while plugged in
   cam doctor                       check that everything is working
+  cam diagnose                     full report for troubleshooting (emails shortened, no tokens)
 `;
 
 async function main() {
@@ -193,6 +194,10 @@ async function main() {
       const { keepAwake } = await import('../src/install.mjs');
       if (arg !== 'on' && arg !== 'off') throw new Error('Usage: cam keep-awake on|off');
       return console.log(keepAwake(arg === 'on'));
+    }
+    case 'diagnose': {
+      const { diagnose } = await import('../src/diagnose.mjs');
+      return console.log(await diagnose());
     }
     case 'doctor': {
       const { doctor } = await import('../src/install.mjs');
