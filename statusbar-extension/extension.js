@@ -308,7 +308,7 @@ function renderHeader() {
 function platAccounts(p) {
   if (p === 'claude') {
     const d = S.state?.accounts;
-    return (d?.accounts || []).map((a) => ({ name: a.name, email: a.email, signedIn: a.status !== 'needs-login', live: a.active, paused: a.status === 'paused', usable: a.usable, five: a.five, week: a.week, status: a.status, statusLabel: a.statusLabel, verdict: a.verdict, claude: true }));
+    return (d?.accounts || []).map((a) => ({ name: a.name, email: a.email, signedIn: a.status !== 'needs-login', live: a.active, paused: a.status === 'paused', usable: a.usable, five: a.five, week: a.week, status: a.status, statusLabel: a.statusLabel, verdict: a.verdict, known: a.known, error: a.error, checkedAt: a.checkedAt, fetchedAt: a.fetchedAt, claude: true }));
   }
   return S.state?.platformAccounts?.[p]?.accounts || [];
 }
@@ -369,6 +369,11 @@ function renderHome() {
       '<div class="who"><div class="k">' + (acc.frozen === act.name ? 'Active Claude account, frozen' : acc.forced === act.name ? 'Active Claude account, held until 100%' : 'Active Claude account') + '</div><div class="e" title="' + esc(act.email || act.name) + '">' + esc(act.email || act.name) + '</div>' +
       ln('Weekly limit', act.week) + ln('5-hour session', act.five) + (acc.frozen === act.name ? '<div class="ln muted">Frozen: Claude Code stays on this account, even at its limits, until you unfreeze it.</div>' : next ? '<div class="ln muted">When it runs out, Claude Code moves to ' + esc(next) + '</div>' : '') + '</div>' +
       '<div class="hero-acts"><button class="primary" data-act="new-from-home">Start an agent</button><button data-act="goto-plat" data-p="claude">Manage accounts</button></div></div>';
+  } else if (acc?.accounts?.length) {
+    const pick = acc.accounts.find((a) => a.usable) || acc.accounts[0];
+    h += acc.mainSignedIn
+      ? '<div class="hero"><div class="who"><div class="k">Claude Code is signed in to an account that isn’t saved here</div><div class="e">' + esc(acc.mainEmail || 'Unknown account') + '</div><div class="ln muted">Save it to track its limits and include it in switching, or switch Claude Code to one of your ' + acc.accounts.length + ' saved accounts.</div></div><div class="hero-acts"><button class="primary" data-act="import-current">Save this account</button><button data-act="acct-activate" data-p="claude" data-n="' + esc(pick.name) + '">Switch to ' + esc(claudeLabel(pick.name)) + '</button></div></div>'
+      : '<div class="hero"><div class="who"><div class="k">Claude Code isn’t signed in</div><div class="e">Choose an account to use</div><div class="ln muted">You have ' + acc.accounts.length + ' saved accounts. Switching signs Claude Code in with one of them.</div></div><div class="hero-acts"><button class="primary" data-act="acct-activate" data-p="claude" data-n="' + esc(pick.name) + '">Use ' + esc(claudeLabel(pick.name)) + '</button><button data-act="goto-plat" data-p="claude">Manage accounts</button></div></div>';
   } else {
     h += '<div class="hero"><div class="who"><div class="k">Claude account</div><div class="e">No account managed yet</div><div class="ln muted">Add your Claude accounts to see their limits here.</div></div><div class="hero-acts"><button class="primary" data-act="add-account" data-p="claude">Add a Claude account</button></div></div>';
   }
@@ -419,7 +424,12 @@ function accountCard(p, a) {
   const ident = a.email ? (a.plan || '') : (a.plan || (a.isDefaultHome ? 'your normal ' + PLAT[p][1] + ' login' : ''));
   let h = '<div class="acard' + (live ? ' live' : '') + '"><div class="h"><b title="' + esc(a.email || a.name) + '">' + esc(a.email || a.name) + '</b>' + (a.email ? '<span class="small muted" title="Saved as">' + esc(a.name) + '</span>' : '') + (live ? '<span class="badge b-info">' + liveLabel + '</span>' : '') + '<span style="margin-left:auto">' + badge + '</span></div>';
   if (ident) h += '<div class="id" title="' + esc(ident) + '">' + esc(ident) + '' + '</div>';
-  if (a.claude) h += usageBlock('5-hour session', a.five) + usageBlock('Weekly limit', a.week) + (a.verdict ? '<div class="small muted">Plan: ' + esc(a.verdict.text) + '</div>' : '');
+  if (a.claude) {
+    if (!a.known) h += '<div class="small muted">Usage not checked yet. It appears within a few minutes, or press Refresh.</div>';
+    else h += usageBlock('5-hour session', a.five) + usageBlock('Weekly limit', a.week) + (a.verdict ? '<div class="small muted">Plan: ' + esc(a.verdict.text) + '</div>' : '');
+    if (a.error) h += '<div class="warnline" title="' + esc(a.error) + '">Usage check failed: ' + esc(friendly(a.error)) + (a.fetchedAt ? '. Showing numbers from ' + ago(a.fetchedAt) + '.' : '. No numbers yet.') + '</div>';
+    else if (a.fetchedAt) h += '<div class="small muted">Usage checked ' + ago(a.fetchedAt) + '</div>';
+  }
   else if (a.usage && !a.usage.error) {
     h += usageBlock('5-hour window', a.usage.five) + usageBlock('Weekly limit', a.usage.week);
     if (a.usage.groups) h += a.usage.groups.slice(0, 4).map((g) => usageBlock(g.label + ' quota', { util: g.util, resetsAt: g.resetsAt })).join('');
@@ -777,6 +787,7 @@ document.addEventListener('click', (e) => {
     case 'acct-force': return post({ cmd: 'acct-force', name: t.dataset.n });
     case 'acct-release': return post({ cmd: 'acct-release' });
     case 'acct-freeze': return post({ cmd: 'acct-freeze' });
+    case 'import-current': return post({ cmd: 'import-current' });
     case 'acct-unfreeze': return post({ cmd: 'acct-unfreeze' });
     case 'acct-pause': return post({ cmd: 'acct-pause', platform: t.dataset.p, name: t.dataset.n, paused: t.dataset.paused === 'true' });
     case 'acct-remove': return post({ cmd: 'acct-remove', platform: t.dataset.p, name: t.dataset.n });
@@ -1036,6 +1047,7 @@ function activate(ctx) {
           w.postMessage({ type: 'toast', text: `${r.changed ? 'Switched to' : 'Staying on'} ${a.email || m.name}: held until it reaches 100%.` });
           return refreshState();
         }
+        case 'import-current': { const r = await api('POST', '/api/accounts/import-current'); w.postMessage({ type: 'toast', text: `Saved ${r?.email || 'the current login'}. It is now part of your accounts.` }); return refreshState(); }
         case 'acct-freeze': { const r = await api('POST', '/api/accounts/freeze'); w.postMessage({ type: 'toast', text: `Frozen: Claude Code stays on ${r?.frozen ?? 'this account'} until you unfreeze it.` }); return refreshState(); }
         case 'acct-unfreeze': { const r = await api('POST', '/api/accounts/unfreeze'); w.postMessage({ type: 'toast', text: r?.switched ? `Unfrozen. Automatic switching moved Claude Code to ${r.to}.` : 'Unfrozen. Automatic switching decides again.' }); return refreshState(); }
         case 'acct-release': await api('POST', '/api/accounts/release-hold'); w.postMessage({ type: 'toast', text: 'Hold released: automatic switching decides again.' }); return refreshState();

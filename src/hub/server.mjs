@@ -147,6 +147,13 @@ const routes = [
   // Force-switch to a Claude account past its thresholds; it is held until 100% (then auto-switching resumes)
   ['POST', /^\/api\/platform-accounts\/claude\/([^/]+)\/force$/, async ([, n]) => (await import('../switcher.mjs')).forceSwitch(decodeURIComponent(n))],
   ['POST', /^\/api\/accounts\/release-hold$/, async () => (await import('../switcher.mjs')).releaseForced()],
+  ['POST', /^\/api\/accounts\/import-current$/, async () => {
+    const { importCurrent } = await import('../accounts.mjs');
+    const { loadAccounts } = await import('../store.mjs');
+    const used = new Set(loadAccounts().map((a) => a.name));
+    let k = 1; while (used.has(String(k))) k++;
+    return importCurrent(String(k));
+  }],
   ['POST', /^\/api\/accounts\/freeze$/, async () => (await import('../switcher.mjs')).freezeActive()],
   ['POST', /^\/api\/accounts\/unfreeze$/, async () => (await import('../switcher.mjs')).unfreeze()],
   // Home-page switches: { ready?: bool, autoSwitch?: bool }

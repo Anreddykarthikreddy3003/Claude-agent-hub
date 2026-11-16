@@ -1,18 +1,60 @@
 /** Runs the real Claude Code CLI (so Claude Code itself owns token refresh). */
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { FILES } from './paths.mjs';
 import { loadConfig } from './store.mjs';
 
+/** Folders where editors keep extensions; the Claude Code extension bundles a full claude.exe in each. */
+const EDITOR_EXT_DIRS = ['.vscode', '.vscode-insiders', '.antigravity', '.antigravity-ide', '.cursor', '.windsurf', '.vscodium'];
+
+const verKey = (dir) => (dir.match(/(\d+)\.(\d+)\.(\d+)/) || [0, 0, 0, 0]).slice(1).map((x) => String(x).padStart(6, '0')).join('.');
+
+/** The newest claude.exe bundled with the Claude Code extension in any editor, or null. */
+export function bundledClaude() {
+  const home = os.homedir();
+  const hits = [];
+  for (const d of EDITOR_EXT_DIRS) {
+    const ext = path.join(home, d, 'extensions');
+    let names = [];
+    try { names = fs.readdirSync(ext).filter((x) => /^anthropic\.claude-code-/i.test(x)); } catch { continue; }
+    for (const x of names) {
+      const exe = path.join(ext, x, 'resources', 'native-binary', process.platform === 'win32' ? 'claude.exe' : 'claude');
+      if (fs.existsSync(exe)) hits.push({ exe, key: verKey(x) });
+    }
+  }
+  hits.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+  return hits[0]?.exe || null;
+}
+
+let cached = null;
+/**
+ * Where the Claude Code CLI is, in order: the saved path, PATH (a real .exe), the standalone installer's
+ * location, then the copy bundled with the Claude Code extension. Re-checked every minute, so installing or
+ * updating Claude Code is picked up without restarting the service.
+ */
 export function resolveClaude() {
+  if (cached && Date.now() - cached.at < 60e3 && (cached.path === 'claude' || fs.existsSync(cached.path))) return cached.path;
+  const found = findClaude();
+  cached = { path: found.path, source: found.source, at: Date.now() };
+  return found.path;
+}
+
+/** Same search as resolveClaude(), plus where the CLI was found (for cam doctor and the dashboard). */
+export function findClaude() {
   const cfg = loadConfig();
-  if (cfg.claudePath && fs.existsSync(cfg.claudePath)) return cfg.claudePath;
+  if (cfg.claudePath && fs.existsSync(cfg.claudePath)) return { path: cfg.claudePath, source: 'saved path' };
   if (process.platform === 'win32') {
     const r = spawnSync('where', ['claude'], { encoding: 'utf8', windowsHide: true });
     const hit = (r.stdout || '').split(/\r?\n/).map((s) => s.trim()).find((s) => /\.exe$/i.test(s));
-    if (hit) return hit;
+    if (hit) return { path: hit, source: 'PATH' };
+    const local = path.join(os.homedir(), '.local', 'bin', 'claude.exe');
+    if (fs.existsSync(local)) return { path: local, source: 'standalone install' };
   }
-  return 'claude';
+  const b = bundledClaude();
+  if (b) return { path: b, source: 'Claude Code extension' };
+  return { path: 'claude', source: 'not found' };
 }
 
 /**

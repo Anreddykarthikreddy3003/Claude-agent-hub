@@ -3,7 +3,7 @@ import { MAIN_CREDS, slotCreds, slotDir, FILES } from './paths.mjs';
 import { withLock, tokenHash } from './util.mjs';
 import { loadAccounts, loadConfig, loadState, updateState, appendLog } from './store.mjs';
 import { fetchUsage } from './api.mjs';
-import { cliAuthStatus } from './claude.mjs';
+import { cliAuthStatus, findClaude } from './claude.mjs';
 import { readOauth, detectActive } from './accounts.mjs';
 import { trackWindow, makeView } from './engine.mjs';
 
@@ -69,7 +69,13 @@ async function fetchOne(acc, prev) {
   for (let attempt = 0; attempt < 2; attempt++) {
     if (expired(loc.oauth) || attempt === 1) {
       loc = await refreshLogin(acc);
-      if (expired(loc.oauth)) return { ...base, ...infer(prev, now), stale: true, error: 'token idle; refreshes on next prime/use' };
+      if (expired(loc.oauth)) {
+        const cli = findClaude();
+        const error = cli.path === 'claude'
+          ? 'sign-in token expired and could not be refreshed: the Claude CLI was not found on this computer (install Claude Code, then run cam doctor)'
+          : 'sign-in token expired and Claude Code could not refresh it yet; it retries on the next check (or press Test)';
+        return { ...base, ...infer(prev, now), stale: true, error };
+      }
     }
     try {
       const u = await fetchUsage(loc.oauth.accessToken);

@@ -88,6 +88,7 @@ export function statusJson() {
     service: { running: now - (st.daemon?.lastTick || 0) < 3 * 60e3, lastTick: st.daemon?.lastTick || null },
     active: st.active,
     mainEmail: st.mainOwner?.email || null,
+    mainSignedIn: !!st.mainOwner,
     accounts: views.map((v) => ({
       name: v.name,
       email: v.email,
@@ -105,6 +106,9 @@ export function statusJson() {
       usable: v.usable,
       stale: v.stale,
       known: v.known,
+      error: st.usage?.[v.name]?.error || null,
+      checkedAt: st.usage?.[v.name]?.attemptAt || null,
+      fetchedAt: st.usage?.[v.name]?.fetchedAt || null,
       Y: +v.Y.toFixed(1),
       verdict: weekVerdict(v),
     })),

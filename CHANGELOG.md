@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-16
+
+### Fixed
+- Computers where Claude Code came only with the VS Code / Antigravity extension: the service now finds the CLI bundled with the extension (newest version), and the standalone install in ~/.local/bin, instead of relying on PATH. Without it, sign-in tokens could not be refreshed, Test and priming failed, and the version showed as "unknown". The CLI is looked up again every minute, so installing Claude Code later needs no restart.
+- A failed usage check no longer looks like an unused account: each Claude account card shows when usage was last checked, or why the check failed, or that it has not been checked yet.
+- Home no longer says "No account managed yet" when accounts are saved but Claude Code is signed in to a different login (it offers to save that login, or to switch) or is not signed in (it offers to switch).
+- cam doctor shows where the Claude CLI was found and the last usage check of every account.
+
 ## [1.0.2] - 2026-11-16
 
 ### Added
@@ -47,7 +55,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/releases/tag/v1.0.0

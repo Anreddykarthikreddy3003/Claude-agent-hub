@@ -5,7 +5,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import { FILES, DATA, ROOT, BIN, HOME, MAIN_SETTINGS, MAIN_CREDS } from './paths.mjs';
 import { readJson, writeJsonAtomic, pidAlive } from './util.mjs';
 import { loadConfig, saveConfig, loadAccounts, loadState, backup } from './store.mjs';
-import { resolveClaude } from './claude.mjs';
+import { resolveClaude, findClaude } from './claude.mjs';
 
 export const TASK_NAME = 'ClaudeAgentHub';
 export const MARKETPLACE = 'claude-agent-hub';
@@ -180,13 +180,16 @@ export async function doctor() {
   const ok = (c, label, extra = '') => out.push(`${c ? '✅' : '❌'} ${label}${extra ? ` — ${extra}` : ''}`);
   ok(Number(process.versions.node.split('.')[0]) >= 20, `Node ${process.versions.node}`);
   const claude = resolveClaude();
-  ok(claude !== 'claude' || process.platform !== 'win32', `Claude CLI`, claude);
+  const fc = findClaude();
+  ok(fc.path !== 'claude' || process.platform !== 'win32', 'Claude CLI', fc.path !== 'claude' ? `${fc.path} (${fc.source})` : 'not found: install Claude Code (claude.ai/download) or its VS Code / Antigravity extension');
   ok(!!readJson(MAIN_CREDS, null)?.claudeAiOauth, 'Claude Code is logged in');
   const accounts = loadAccounts();
   ok(accounts.length > 0, `Accounts saved: ${accounts.length}`, accounts.map((a) => `${a.name}${a.paused ? ' (paused)' : ''}`).join(', '));
   for (const a of accounts) {
     const c = readJson(path.join(DATA, 'slots', a.name, '.credentials.json'), null)?.claudeAiOauth;
     ok(!!c, `  slot ${a.name} has a saved login`, c?.refreshTokenExpiresAt ? `login valid until ${new Date(c.refreshTokenExpiresAt).toDateString()}` : '');
+    const u = loadState().usage?.[a.name];
+    ok(!!u && !u.error, `  usage check for ${a.name}`, !u ? 'not checked yet' : u.error ? `failed: ${u.error}` : `ok, ${Math.round((Date.now() - (u.fetchedAt || 0)) / 60e3)} min ago`);
   }
   const st = loadState();
   const age = Date.now() - (st.daemon?.lastTick || 0);
