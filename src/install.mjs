@@ -6,6 +6,7 @@ import { FILES, DATA, ROOT, BIN, HOME, MAIN_SETTINGS, MAIN_CREDS } from './paths
 import { readJson, writeJsonAtomic, pidAlive } from './util.mjs';
 import { loadConfig, saveConfig, loadAccounts, loadState, backup } from './store.mjs';
 import { resolveClaude, findClaude } from './claude.mjs';
+import { checkNetwork } from './api.mjs';
 
 export const TASK_NAME = 'ClaudeAgentHub';
 export const MARKETPLACE = 'claude-agent-hub';
@@ -181,6 +182,8 @@ export async function doctor() {
   ok(Number(process.versions.node.split('.')[0]) >= 20, `Node ${process.versions.node}`);
   const claude = resolveClaude();
   const fc = findClaude();
+  const netr = await checkNetwork();
+  ok(netr.ok, 'Network: api.anthropic.com', netr.ok ? (netr.via === 'fetch' ? 'reachable' : `reachable through the fallback (${netr.via}); Node's own fetch failed with ${netr.firstError}`) : netr.error);
   ok(fc.path !== 'claude' || process.platform !== 'win32', 'Claude CLI', fc.path !== 'claude' ? `${fc.path} (${fc.source})` : 'not found: install Claude Code (claude.ai/download) or its VS Code / Antigravity extension');
   ok(!!readJson(MAIN_CREDS, null)?.claudeAiOauth, 'Claude Code is logged in');
   const accounts = loadAccounts();

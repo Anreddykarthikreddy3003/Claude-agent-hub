@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-11-16
+
+### Fixed
+- Usage checks failing with a bare "fetch failed" on some computers while Claude Code itself works. When Node's fetch cannot connect, the request is retried trusting the Windows certificate store (antivirus HTTPS scanning, company networks) and through HTTPS_PROXY / HTTP_PROXY if set. If that also fails, the error names the real cause (certificate, DNS, blocked connection) instead of "fetch failed".
+- cam doctor checks the connection to api.anthropic.com and says which path works.
+
 ## [1.0.3] - 2026-11-16
 
 ### Fixed
@@ -55,7 +61,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.0...v1.0.1
