@@ -6,7 +6,7 @@ import { MAIN_CREDS, MAIN_STATE, SLOTS, slotDir, slotCreds, slotState } from './
 import { readJson, writeJsonAtomic, hash, withLock, tokenHash } from './util.mjs';
 import { loadAccounts, saveAccounts, loadState, updateState, appendLog } from './store.mjs';
 import { fetchProfile } from './api.mjs';
-import { cliAuthStatus, resolveClaude } from './claude.mjs';
+import { cliRenew, resolveClaude } from './claude.mjs';
 import { FILES } from './paths.mjs';
 
 export const readOauth = (file) => readJson(file, null)?.claudeAiOauth || null;
@@ -19,7 +19,7 @@ function assertName(name) {
 async function identify(oauth, configDir) {
   if (!oauth) return null;
   if (oauth.expiresAt && oauth.expiresAt < Date.now() + 30000) {
-    await withLock(FILES.opsLock, () => cliAuthStatus(configDir));
+    await withLock(FILES.opsLock, () => cliRenew(configDir));
     oauth = readOauth(configDir ? path.join(configDir, '.credentials.json') : MAIN_CREDS) || oauth;
   }
   try {

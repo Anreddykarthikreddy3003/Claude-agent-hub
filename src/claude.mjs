@@ -99,10 +99,30 @@ function run(args, configDir, timeoutMs) {
   });
 }
 
-/** Lets Claude Code refresh an expired access token (no message is sent). */
-export async function cliAuthStatus(configDir) {
-  const r = await run(['auth', 'status', '--json'], configDir, 45000);
-  try { return JSON.parse(r.out); } catch { return null; }
+/**
+ * Renewing a sign-in without sending a message. `claude auth status` reports "logged in" but no longer renews an
+ * expired token (measured with Claude Code 2.1.88), while every start of `claude -p` does. A slash command that
+ * doesn't exist is answered locally ("Unknown skill"): measured 0 output tokens, cost 0, no model call, so no
+ * 5-hour window starts. Slash commands must stay ENABLED here (no --disable-slash-commands), or the text would
+ * reach the model as a prompt.
+ */
+export const RENEW_ARGS = [
+  '-p', '/agent-hub-renew-sign-in',
+  '--output-format', 'json',
+  '--model', 'haiku',
+  '--tools', '',
+  '--strict-mcp-config',
+  '--setting-sources', '',
+  '--no-session-persistence',
+];
+
+/** Lets Claude Code renew an expired sign-in for this config dir (null = Claude Code's own login). */
+export async function cliRenew(configDir) {
+  const r = await run(RENEW_ARGS, configDir, 60000);
+  let j = null;
+  try { j = JSON.parse(r.out); } catch {}
+  const usedModel = !!j && ((j.total_cost_usd || 0) > 0 || (j.usage?.output_tokens || 0) > 0);
+  return { ok: !!j, usedModel, text: String(j?.result || r.err || r.out || '').slice(0, 200) };
 }
 
 /** Sends the minimal "hi" that starts a 5-hour window. ~6k cached tokens on Haiku. */

@@ -4,6 +4,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-11-17
+
+### Fixed
+- Idle accounts showed "sign-in token expired and Claude Code could not refresh it yet" about 8 hours after their last use whenever session priming was off. `claude auth status`, which the service used to renew sign-ins, no longer renews an expired token in current Claude Code versions; the priming "hi" had been renewing them as a side effect. The service now starts Claude Code with a slash command that does not exist: Claude Code renews the sign-in on start and answers "Unknown skill" locally, with no model call, no tokens and no 5-hour window started. A log entry is written if a renewal ever does reach the model.
+
 ## [1.0.7] - 2026-11-16
 
 ### Added
@@ -81,7 +86,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.4...v1.0.5

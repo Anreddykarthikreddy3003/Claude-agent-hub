@@ -45,3 +45,11 @@ test('several editors and versions: the newest bundled CLI wins', () => {
 test('no Claude Code anywhere: reported as not found instead of failing later', () => {
   assert.equal(find(fakeHome([])).source, 'not found');
 });
+
+test('sign-in renewal never reaches the model: a slash command that does not exist, with slash commands enabled', async () => {
+  const { RENEW_ARGS } = await import('../src/claude.mjs');
+  const prompt = RENEW_ARGS[RENEW_ARGS.indexOf('-p') + 1];
+  assert.match(prompt, /^\/[a-z-]+$/, 'a bare slash command, answered locally ("Unknown skill")');
+  assert.ok(!RENEW_ARGS.includes('--disable-slash-commands'), 'with slash commands disabled the text would be sent to the model');
+  assert.ok(!['/usage', '/status', '/cost', '/help', '/login'].includes(prompt), 'not a name that exists or could exist as a real command');
+});

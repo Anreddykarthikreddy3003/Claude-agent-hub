@@ -3,7 +3,7 @@ import { MAIN_CREDS, slotCreds, slotDir, FILES } from './paths.mjs';
 import { withLock, tokenHash } from './util.mjs';
 import { loadAccounts, loadConfig, loadState, updateState, appendLog } from './store.mjs';
 import { fetchUsage } from './api.mjs';
-import { cliAuthStatus, findClaude } from './claude.mjs';
+import { cliRenew, findClaude } from './claude.mjs';
 import { readOauth, detectActive } from './accounts.mjs';
 import { trackWindow, makeView } from './engine.mjs';
 
@@ -53,7 +53,11 @@ export function liveConfigDir(name) {
 async function refreshLogin(acc) {
   await withLock(FILES.opsLock, async () => {
     const loc = locate(acc);
-    if (expired(loc.oauth)) await cliAuthStatus(loc.cfgDir);
+    if (expired(loc.oauth)) {
+      const r = await cliRenew(loc.cfgDir);
+      // Renewal must never reach the model (it would start the account's 5-hour window): say so if it ever does
+      if (r.usedModel) appendLog('renew-used-model', { name: acc.name, text: r.text });
+    }
   }).catch(() => {});
   return locate(acc);
 }
