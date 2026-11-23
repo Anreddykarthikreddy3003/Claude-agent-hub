@@ -29,7 +29,8 @@ async function testClaude(name) {
   const { runCapture } = await import('./hub/adapters.mjs');
   const env = { ...process.env, CAM_INTERNAL: '1' };
   return withLock(FILES.opsLock, async () => {
-    const dir = liveConfigDir(name); // decided inside the lock: never touch a parked copy of the active login
+    let dir;
+    try { dir = liveConfigDir(name); } catch (e) { return { ok: false, error: e.message }; } // decided inside the lock
     if (dir) env.CLAUDE_CONFIG_DIR = dir; else delete env.CLAUDE_CONFIG_DIR;
     const r = await runCapture(resolveClaude(), ['-p', PROMPT, '--model', 'haiku', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--disable-slash-commands', '--no-session-persistence', '--system-prompt', 'Reply with one word.', '--output-format', 'json'], 90000, { env });
     let j = null;

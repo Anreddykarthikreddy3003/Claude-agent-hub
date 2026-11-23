@@ -4,6 +4,15 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-11-23
+
+### Fixed
+- Saved Claude logins being revoked by Anthropic ("OAuth access token has been revoked"). Claude Code renews its own login every few hours and Anthropic retires the old refresh token each time; the saved copy of the active account still held that retired token, and if the service could not yet verify the renewed login (for example a network hiccup on the profile check) it renewed the saved copy with the retired token. Anthropic treats a reused refresh token as stolen and revokes the whole login. The service now never renews, primes or tests the saved copy of the account Claude Code is on, and touches no saved copy while Claude Code's login is unverified.
+- A sign-in that cannot be renewed is reported as signed out ("Sign in again") after two attempts 30 minutes apart, instead of "could not refresh it yet" forever, and is no longer chosen for switching.
+- Plugin hook errors at the start of a chat ("Busy: another account operation is running"): hooks no longer renew sign-ins and give up quietly after 15 seconds instead of running into Claude Code's hook time limit.
+- The "% of weekly unused" notification repeated every 30 minutes (the reset time from Anthropic jitters by seconds); it now fires once per weekly window.
+- Status and the start-of-chat message said "auto-priming ON" and listed a next "hi" while priming was switched off.
+
 ## [1.0.8] - 2026-11-17
 
 ### Fixed
@@ -86,7 +95,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.5...v1.0.6

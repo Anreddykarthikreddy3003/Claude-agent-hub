@@ -40,7 +40,7 @@ export async function runHook(event) {
       return;
     }
     const { name: active } = await detectActive();
-    if (active) await refreshUsage({ names: [active], maxAgeMs: activeMaxAgeMs(active) });
+    if (active) await refreshUsage({ names: [active], maxAgeMs: activeMaxAgeMs(active), noRenew: true });
     const early = event === 'session-start' ? await switchAtChatStart() : null;
     const r = early?.switched ? early : await autoSwitchIfNeeded(event);
     publishStatus();
@@ -54,7 +54,7 @@ export async function runHook(event) {
       const a = views.find((v) => v.name === st.active);
       if (a)
         out({
-          systemMessage: `👤 Claude account ${a.email || a.name} · 5h ${a.five.util}%${a.five.resetsAt ? ` (↻${fmtDur(a.five.resetsAt - now)})` : ''} · weekly ${a.week.util}% · ${views.filter((v) => v.usable).length}/${views.length} accounts ready · priming ${cfg.ready ? 'on' : 'off'}`,
+          systemMessage: `👤 Claude account ${a.email || a.name} · 5h ${a.five.util}%${a.five.resetsAt ? ` (↻${fmtDur(a.five.resetsAt - now)})` : ''} · weekly ${a.week.util}% · ${views.filter((v) => v.usable).length}/${views.length} accounts ready · priming ${cfg.ready && cfg.primeAll !== false ? 'on' : 'off'}`,
         });
     }
   } catch (e) {

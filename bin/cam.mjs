@@ -163,7 +163,12 @@ async function main() {
 
     case 'hook': {
       const { runHook } = await import('../src/hooks.mjs');
-      return runHook(arg || 'unknown');
+      // Claude Code shows a hook that runs past its limit (20-30 s) as a plugin error. The hook only refreshes
+      // status, so after 15 s it gives up quietly; the background service does the rest.
+      let timedOut = false;
+      await Promise.race([runHook(arg || 'unknown'), new Promise((r) => setTimeout(() => { timedOut = true; r(); }, 15000).unref())]);
+      if (timedOut) process.exit(0);
+      return;
     }
 
     case 'statusline': {

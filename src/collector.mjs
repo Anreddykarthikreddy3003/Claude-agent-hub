@@ -43,26 +43,56 @@ function locate(acc) {
   return mainIsThis ? { file: MAIN_CREDS, cfgDir: null, oauth: mainO, main: true } : { file: slotCreds(acc.name), cfgDir: slotDir(acc.name), oauth: slotO, main: false };
 }
 
-/** Config dir holding this account's live login right now (null = Claude Code's main config). */
+/**
+ * May the service use (renew, prime, test) this account's SAVED copy right now?
+ * Claude Code renews its own login every few hours and Anthropic retires the old refresh token each time. The
+ * saved copy of the account Claude Code is on holds that same token. Using it after Claude Code renewed would
+ * present a retired token, which Anthropic treats as stolen and answers by revoking the whole login: both copies
+ * die and Claude Code asks to sign in. So: never for the account on Claude Code's login, and for no account while
+ * that login can't be verified (it might be this one).
+ */
+export const WAITING = 'waiting to confirm which account Claude Code is using before touching this saved sign-in';
+export function slotSafe(acc) {
+  const mainO = readOauth(MAIN_CREDS);
+  if (!mainO) return true; // Claude Code is signed out: nothing else holds these tokens
+  const o = loadState().mainOwner;
+  if (!o?.trusted || o.tokenHash !== tokenHash(mainO)) return false; // unverified, or renewed since verified
+  return o.uuid !== acc.uuid;
+}
+
+/** Config dir holding this account's live login right now (null = Claude Code's main config). Throws WAITING when unsafe. */
 export function liveConfigDir(name) {
   const acc = loadAccounts().find((a) => a.name === name);
-  return acc ? locate(acc).cfgDir : slotDir(name);
+  if (!acc) return slotDir(name);
+  const loc = locate(acc);
+  if (!loc.main && !slotSafe(acc)) throw new Error(WAITING);
+  return loc.cfgDir;
 }
 
-/** Let Claude Code refresh the login, re-deciding its location INSIDE the lock (never refresh a parked copy). */
-async function refreshLogin(acc) {
+const RENEW_RETRY_MS = 30 * 60e3;
+
+/**
+ * Let Claude Code renew the login, re-deciding its location INSIDE the lock. Returns { loc, waiting, failed, paused }.
+ * A saved copy is renewed only when slotSafe() allows it; after a failed renewal the next try waits 30 minutes.
+ */
+async function refreshLogin(acc, prev) {
+  const info = { waiting: false, failed: false, paused: false };
   await withLock(FILES.opsLock, async () => {
     const loc = locate(acc);
-    if (expired(loc.oauth)) {
-      const r = await cliRenew(loc.cfgDir);
-      // Renewal must never reach the model (it would start the account's 5-hour window): say so if it ever does
-      if (r.usedModel) appendLog('renew-used-model', { name: acc.name, text: r.text });
-    }
-  }).catch(() => {});
-  return locate(acc);
+    if (!expired(loc.oauth)) return;
+    if (!loc.main && !slotSafe(acc)) { info.waiting = true; return; }
+    if (!loc.main && prev?.renewFailedAt && Date.now() - prev.renewFailedAt < RENEW_RETRY_MS) { info.paused = true; return; }
+    const r = await cliRenew(loc.cfgDir);
+    // Renewal must never reach the model (it would start the account's 5-hour window): say so if it ever does
+    if (r.usedModel) appendLog('renew-used-model', { name: acc.name, text: r.text });
+    const after = locate(acc);
+    info.failed = expired(after.oauth);
+    appendLog('renew', { name: acc.name, where: loc.main ? 'claude-code-login' : 'saved-copy', renewed: !info.failed });
+  }, { timeoutMs: 20000 }).catch(() => { info.waiting = true; });
+  return { loc: locate(acc), ...info };
 }
 
-async function fetchOne(acc, prev) {
+async function fetchOne(acc, prev, { noRenew = false } = {}) {
   const now = Date.now();
   const base = { attemptAt: now, fetchedAt: prev?.fetchedAt || 0 };
   let loc = locate(acc);
@@ -72,18 +102,29 @@ async function fetchOne(acc, prev) {
 
   for (let attempt = 0; attempt < 2; attempt++) {
     if (expired(loc.oauth) || attempt === 1) {
-      loc = await refreshLogin(acc);
+      // Hooks never renew: they must stay fast, and the background service does it
+      if (noRenew && expired(loc.oauth)) return { ...prev, ...base, ...infer(prev, now), stale: true };
+      const rr = await refreshLogin(acc, prev);
+      loc = rr.loc;
       if (expired(loc.oauth)) {
-        const cli = findClaude();
-        const error = cli.path === 'claude'
-          ? 'sign-in token expired and could not be refreshed: the Claude CLI was not found on this computer (install Claude Code, then run cam doctor)'
-          : 'sign-in token expired and Claude Code could not refresh it yet; it retries on the next check (or press Test)';
-        return { ...base, ...infer(prev, now), stale: true, error };
+        const keep = { renewFails: prev?.renewFails || 0, renewFailedAt: prev?.renewFailedAt || null };
+        if (rr.waiting) return { ...base, ...infer(prev, now), stale: true, ...keep, error: WAITING };
+        if (findClaude().path === 'claude')
+          return { ...base, ...infer(prev, now), stale: true, ...keep, error: 'sign-in token expired and could not be renewed: the Claude CLI was not found on this computer (install Claude Code, then run cam doctor)' };
+        if (rr.paused) return { ...base, ...infer(prev, now), stale: true, ...keep, needsLogin: keep.renewFails >= 2, error: prev?.error || 'sign-in token expired; renewal paused after a failure' };
+        const fails = keep.renewFails + (rr.failed ? 1 : 0);
+        const dead = fails >= 2;
+        return {
+          ...base, ...infer(prev, now), stale: true, renewFails: fails, renewFailedAt: rr.failed ? now : keep.renewFailedAt, needsLogin: dead,
+          error: dead
+            ? 'signed out: Anthropic no longer accepts this saved sign-in (it was revoked or expired). Sign in again: Accounts → Sign in again'
+            : 'sign-in token expired and renewing it failed; trying again in 30 minutes',
+        };
       }
     }
     try {
       const u = await fetchUsage(loc.oauth.accessToken);
-      return { attemptAt: now, fetchedAt: now, ...u, stale: false, error: null, needsLogin: false };
+      return { attemptAt: now, fetchedAt: now, ...u, stale: false, error: null, needsLogin: false, renewFails: 0, renewFailedAt: null };
     } catch (e) {
       if (e.status === 401 && attempt === 0 && !e.cloudflare) continue; // force a CLI refresh, then retry once
       // Only Anthropic's own JSON auth errors mean "sign in again". Outages, Cloudflare challenges and network
@@ -105,7 +146,7 @@ async function fetchOne(acc, prev) {
  * Refresh usage. `names` limits which accounts; `maxAgeMs` skips accounts fetched recently
  * (unless one of their windows has reset since).
  */
-export async function refreshUsage({ names = null, maxAgeMs = 0 } = {}) {
+export async function refreshUsage({ names = null, maxAgeMs = 0, noRenew = false } = {}) {
   const now = Date.now();
   const accounts = loadAccounts();
   await detectActive(); // keeps the trusted owner record current before locating logins
@@ -121,7 +162,7 @@ export async function refreshUsage({ names = null, maxAgeMs = 0 } = {}) {
     // instead of waiting for the next regular check (30 min for idle accounts).
     const retryFailed = !!prev?.error && !!prev.backoffUntil && prev.backoffUntil <= now;
     if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed && !retryFailed) continue;
-    results[acc.name] = await fetchOne(acc, prev);
+    results[acc.name] = await fetchOne(acc, prev, { noRenew });
   }
   if (Object.keys(results).length) {
     await updateState((s) => {

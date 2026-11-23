@@ -361,3 +361,68 @@ test('saving an already saved account without a verified identity (network down)
   assert.deepEqual(r.accts, ['A', 'B']);
   assert.equal(fs.readFileSync(path.join(sb.data, 'slots', 'B', '.credentials.json'), 'utf8'), before);
 });
+
+// ── token safety: never present a refresh token Claude Code may have retired ──
+
+const expiredTok = (n) => ({ claudeAiOauth: { accessToken: `at-${n}`, refreshToken: `rt-${n}`, expiresAt: Date.now() - 3600e3, scopes: [], subscriptionType: 'pro' } });
+function safetySandbox(opts) {
+  const sb = sandbox(opts);
+  // Node stands in for the Claude CLI: a renewal attempt fails at once and is logged, nothing is sent anywhere
+  fs.writeFileSync(path.join(sb.data, 'config.json'), JSON.stringify({ ready: false, notifications: false, claudePath: process.execPath }));
+  return sb;
+}
+const renews = (sb) => { const f = path.join(sb.data, 'log.jsonl'); return fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split(String.fromCharCode(10)).filter((l) => l.includes('"type":"renew"')) : []; };
+const OFFLINE = `globalThis.fetch = async () => { throw new TypeError('fetch failed'); }; (await import('./src/api.mjs')).net.httpsGet = async () => { throw Object.assign(new Error('reset'), { code: 'ECONNRESET' }); };`;
+const REFRESH = (names, extra = '') => `const { refreshUsage } = await import('./src/collector.mjs'); await refreshUsage({ names: ${JSON.stringify(names)}${extra} }); const fs = await import('node:fs'); console.log(JSON.stringify(JSON.parse(fs.readFileSync(process.env.CAM_HOME + '/state.json', 'utf8')).usage));`;
+
+test('Claude Code renewed its login and it cannot be verified: the saved copy of that account is NOT renewed', () => {
+  // main = A after Claude Code renewed it (new tokens); A's saved copy still holds the retired, expired token
+  const sb = safetySandbox({ mainCreds: { ...tok('A2') }, mainMeta: oa('A') });
+  fs.writeFileSync(path.join(sb.data, 'slots', 'A', '.credentials.json'), JSON.stringify(expiredTok('A')));
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', mainOwner: { tokenHash: 'before-renewal', uuid: 'uuid-A', trusted: true }, usage: {}, alerts: {} }));
+  const u = run(sb, OFFLINE + REFRESH(['A']));
+  assert.equal(renews(sb).length, 0, 'no renewal with the retired token');
+  assert.match(u.A.error, /waiting to confirm/);
+  assert.equal(u.A.needsLogin, undefined, 'not reported as signed out');
+});
+
+test('an idle account whose sign-in cannot be renewed is reported as signed out after two attempts, 30 minutes apart', () => {
+  const sb = safetySandbox();
+  fs.writeFileSync(path.join(sb.data, 'slots', 'B', '.credentials.json'), JSON.stringify(expiredTok('B')));
+  const okFetch = `globalThis.fetch = async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });`;
+  let u = run(sb, okFetch + REFRESH(['B']));
+  assert.equal(renews(sb).length, 1, 'idle account: renewal allowed');
+  assert.equal(u.B.renewFails, 1);
+  assert.notEqual(u.B.needsLogin, true, 'one failure is not enough');
+  // right away again: paused, no second attempt
+  const s = read(path.join(sb.data, 'state.json'));
+  s.usage.B.attemptAt = Date.now() - 60e3;
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify(s));
+  run(sb, okFetch + REFRESH(['B']));
+  assert.equal(renews(sb).length, 1, 'paused for 30 minutes after a failure');
+  // 31 minutes later: second failure -> signed out
+  const s2 = read(path.join(sb.data, 'state.json'));
+  s2.usage.B.attemptAt = Date.now() - 31 * 60e3; s2.usage.B.renewFailedAt = Date.now() - 31 * 60e3;
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify(s2));
+  u = run(sb, okFetch + REFRESH(['B']));
+  assert.equal(renews(sb).length, 2);
+  assert.equal(u.B.needsLogin, true);
+  assert.match(u.B.error, /Sign in again/);
+});
+
+test('hooks never renew a sign-in', () => {
+  const sb = safetySandbox();
+  fs.writeFileSync(path.join(sb.data, 'slots', 'B', '.credentials.json'), JSON.stringify(expiredTok('B')));
+  run(sb, `globalThis.fetch = async () => new Response('{}', { status: 200 });` + REFRESH(['B'], ', noRenew: true'));
+  assert.equal(renews(sb).length, 0);
+});
+
+test('slotSafe: never the account on Claude Code\'s login, nothing while that login is unverified', () => {
+  const sb = safetySandbox();
+  const r = run(sb, `const { slotSafe } = await import('./src/collector.mjs'); const { detectActive } = await import('./src/accounts.mjs'); const { updateState } = await import('./src/store.mjs');
+    await detectActive({ force: true }); const verified = { A: slotSafe({ name: 'A', uuid: 'uuid-A' }), B: slotSafe({ name: 'B', uuid: 'uuid-B' }) };
+    await updateState((s) => { s.mainOwner.trusted = false; }); const unverified = { B: slotSafe({ name: 'B', uuid: 'uuid-B' }) };
+    console.log(JSON.stringify({ verified, unverified }));`);
+  assert.deepEqual(r.verified, { A: false, B: true });
+  assert.deepEqual(r.unverified, { B: false });
+});

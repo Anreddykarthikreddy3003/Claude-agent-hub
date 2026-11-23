@@ -17,7 +17,13 @@ const DAEMON_LOCK = FILES.pid;
 
 export async function primeAccount(name) {
   // Location decided inside the lock from the tokens (never prime a parked copy of the active login).
-  const r = await withLock(FILES.opsLock, () => cliPrime(liveConfigDir(name)), { timeoutMs: 60000 });
+  let skipped = null;
+  const r = await withLock(FILES.opsLock, () => {
+    let dir;
+    try { dir = liveConfigDir(name); } catch (e) { skipped = e.message; return { ok: false, text: e.message }; }
+    return cliPrime(dir);
+  }, { timeoutMs: 60000 });
+  if (skipped) return r; // retried on a later tick, once the active login is verified
   let fails = 0;
   await updateState((s) => {
     const prev = s.primes[name] || {};
@@ -78,7 +84,7 @@ async function checkAlerts() {
   const fire = [];
   for (const v of views) {
     if (v.wasteAlarm) {
-      const key = `waste:${v.name}:${v.week.resetsAt}`;
+      const key = `waste:${v.name}:${Math.round(v.week.resetsAt / 3600e3)}`;
       if (!st.alerts?.[key]) fire.push([key, `${v.name}: ${v.remaining}% of weekly unused`, `Weekly resets ${fmtTime(v.week.resetsAt)}. It is now used first.`]);
     }
     if (v.status === 'needs-login') {

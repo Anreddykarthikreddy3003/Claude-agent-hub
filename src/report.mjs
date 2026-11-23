@@ -23,7 +23,8 @@ function daemonLine(st, now) {
 export function statusText() {
   const { cfg, st, views, accounts, now } = snapshot();
   const out = [];
-  out.push(`Claude Agent Hub · auto-priming: ${cfg.ready ? 'ON (24/7)' : 'OFF'} · service: ${daemonLine(st, now)}`);
+  const primingOn = cfg.ready && cfg.primeAll !== false;
+  out.push(`Claude Agent Hub · auto-priming: ${primingOn ? 'ON (24/7)' : 'OFF'} · service: ${daemonLine(st, now)}`);
   if (!accounts.length) {
     out.push('', 'No accounts yet.', '  1. /accounts import <name>   save the login Claude Code is using now', '  2. /accounts add <name>      sign in to each other account once');
     return out.join('\n');
@@ -49,7 +50,7 @@ export function statusText() {
     const n = nextAvailable(views, now);
     out.push(n ? `No other account available now. Next: ${n.name} at ${fmtTime(n.at)}.` : 'No other account available.');
   }
-  if (cfg.ready) {
+  if (primingOn) {
     const plan = planPrimes(views, now, primeOptions(st));
     if (plan.length) out.push(`Next "hi": ${plan.map((p) => `${p.name} ${p.at <= now + 60e3 ? 'now' : fmtTime(p.at)}`).join(' · ')}`);
     else out.push('Next "hi": all 5h windows already running.');
@@ -114,7 +115,7 @@ export function statusJson() {
     })),
     next: best ? { name: best.name, why: whyBest(best) } : null,
     nextAvailable: best ? null : nextAvailable(others, now),
-    primes: cfg.ready ? planPrimes(views, now, primeOptions(st)) : [],
+    primes: cfg.ready && cfg.primeAll !== false ? planPrimes(views, now, primeOptions(st)) : [],
     lastSwitch: st.lastSwitch || null,
   };
 }
