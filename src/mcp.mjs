@@ -1,5 +1,6 @@
 /** Minimal MCP server over stdio (newline-delimited JSON-RPC 2.0), no dependencies. */
 import readline from 'node:readline';
+import { assertHubEnabled } from './store.mjs';
 import { statusText, weekText, bestText } from './report.mjs';
 import { switchTo } from './switcher.mjs';
 import { rankViews } from './engine.mjs';
@@ -147,6 +148,7 @@ async function callTool(name, args = {}) {
       return weekText();
     case 'codex_ask':
     case 'codex_continue': {
+      assertHubEnabled();
       const { runCodex, logExchange, formatResult } = await import('./codex.mjs');
       const r = await runCodex({
         prompt: args.prompt,

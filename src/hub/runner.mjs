@@ -8,6 +8,7 @@
  *  - lost session → a new session starts with a capped context recap, so nothing is lost
  */
 import fs from 'node:fs';
+import { hubEnabled, assertHubEnabled } from '../store.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { DATA } from '../paths.mjs';
@@ -62,6 +63,7 @@ import { accountEnv, preferredAccount, nextAccount, markLimited, PLATFORM_DEFS }
 
 /** Public entry: deliver a message to an agent (starts a turn now, or queues it). */
 export function send(idOrName, message, { from = 'user' } = {}) {
+  assertHubEnabled();
   const a = getAgent(idOrName);
   if (!a || a.status === 'removed') throw new Error(`No agent "${idOrName}".`);
   if (!message?.trim()) throw new Error('Empty message.');
@@ -253,6 +255,7 @@ function drainQueue(id) {
 
 /** Daemon tick: resume agents whose wait is over; continue turns interrupted by a daemon restart. */
 export function resumeDue() {
+  if (!hubEnabled()) return; // waiting agents continue once the Agent Hub is on again
   const now = Date.now();
   for (const a of listAgents()) {
     if (running.has(a.id)) continue;
@@ -272,6 +275,7 @@ export function resumeDue() {
 
 /** Re-run the message that failed (after fixing a login, a model, or a transient error). */
 export function retry(idOrName) {
+  assertHubEnabled();
   const a = getAgent(idOrName);
   if (!a) throw new Error(`No agent "${idOrName}".`);
   if (running.has(a.id)) return { running: true };

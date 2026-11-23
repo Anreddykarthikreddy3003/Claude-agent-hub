@@ -4,6 +4,9 @@ import { FILES } from './paths.mjs';
 import { readJson, writeJsonAtomic, withLock } from './util.mjs';
 
 export const DEFAULT_CONFIG = {
+  /** Master switch. Off: nothing runs on its own (no checks, switching, priming, renewals, notifications, hook
+   *  messages) and no agent starts. Manual account actions still work; Claude Code itself is unaffected. */
+  enabled: true,
   /** 24/7 automatic "hi" priming for every account. Off until you opt in with `cam ready on`. */
   ready: false,
   /** Move Claude Code to the best account automatically when the active one runs out. */
@@ -125,4 +128,11 @@ export function backup(src, prefix, keep = 15) {
   } catch {
     return null;
   }
+}
+
+/** Is the Agent Hub switched on (the master switch at the top right of the dashboard, or cam on / cam off)? */
+export const hubEnabled = (cfg = loadConfig()) => cfg.enabled !== false;
+export const OFF_MESSAGE = 'The Agent Hub is turned off, so no agent can start. Turn it on with the switch at the top right of the Agent Hub dashboard, or run: cam on';
+export function assertHubEnabled() {
+  if (!hubEnabled()) throw Object.assign(new Error(OFF_MESSAGE), { status: 409, code: 'hub-off' });
 }

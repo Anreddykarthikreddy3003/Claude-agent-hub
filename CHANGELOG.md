@@ -4,6 +4,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-11-23
+
+### Added
+- Master switch at the top right of the dashboard (also `cam on` / `cam off`). Off: nothing runs on its own (no usage checks, switching, priming, sign-in renewals or notifications), the chat hooks stay silent, and no agent can start, from the chat or the dashboard. Manual actions (switch, sign in, Test) still work, and Claude Code itself is unaffected. While off, every page shows a banner with a Turn on button, and the status bar shows "Agent Hub off". Agents waiting for a limit continue once it is on again.
+
 ## [1.0.9] - 2026-11-23
 
 ### Fixed
@@ -95,7 +100,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.9...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.6...v1.0.7

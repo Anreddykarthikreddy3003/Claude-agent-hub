@@ -108,6 +108,17 @@ export async function tick() {
   const cfg = loadConfig();
   const added = await scanPendingSlots();
   for (const n of added) notify(`Account ${n} added`, 'It is now part of the automatic rotation.');
+  if (cfg.enabled === false) {
+    // Master switch off: no checks, switching, priming, renewals or notifications. Sign-ins the user started
+    // still complete, and the service stays reachable so the dashboard can turn it back on.
+    await updateState((s) => { s.daemon = { ...s.daemon, pid: process.pid, lastTick: Date.now() }; });
+    publishStatus();
+    if (hubPush) {
+      try { const pl = await import('./platforms.mjs'); await pl.captureSwapLogins(); hubPush('platformAccounts', pl.allPlatformAccounts()); } catch {}
+      hubPush('accounts', statusJson());
+    }
+    return;
+  }
   await detectActive();
   await syncActiveSlot(); // keep the active account's saved copy current (tokens rotate on every refresh)
   // Background monitoring switch: when off, only the active Claude account is kept current (needed for auto-switching)

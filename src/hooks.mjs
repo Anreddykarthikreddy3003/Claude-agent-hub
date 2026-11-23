@@ -32,6 +32,7 @@ function switchedMsg(r, event) {
 export async function runHook(event) {
   if (process.env.CAM_INTERNAL) return; // our own priming runs
   await drainStdin();
+  if (loadConfig().enabled === false) return; // master switch off: the hooks do nothing
   try {
     ensureDaemon();
     if (!loadAccounts().length) {

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { writeJsonAtomic } from '../util.mjs';
-import { appendLog, readLog, saveConfig } from '../store.mjs';
+import { appendLog, readLog, saveConfig, assertHubEnabled } from '../store.mjs';
 import { statusJson, publishStatus } from '../report.mjs';
 import { bus, HUB_INFO, listAgents, getAgent, createAgent, patchAgent, readEvents, readLinks, appendEvent, eventsPath } from './store.mjs';
 import { send, stop, retry, isRunning } from './runner.mjs';
@@ -111,6 +111,7 @@ async function body(req) {
 }
 
 export async function createAndStart(b) {
+  assertHubEnabled();
   const platform = String(b.platform || '').toLowerCase();
   adapter(platform); // validates
   const model = await resolveModel(platform, b.model || null);
@@ -160,7 +161,7 @@ const routes = [
   ['POST', /^\/api\/settings$/, (_m, _q, b) => {
     const patch = {};
     if (typeof b.ready === 'boolean') patch.ready = b.ready;
-    for (const k of ['autoSwitch', 'monitoring', 'primeAll', 'primeCodex']) if (typeof b[k] === 'boolean') patch[k] = b[k];
+    for (const k of ['enabled', 'autoSwitch', 'monitoring', 'primeAll', 'primeCodex']) if (typeof b[k] === 'boolean') patch[k] = b[k];
     saveConfig(patch);
     appendLog('settings-changed', patch);
     bus.emit('accountsChanged');

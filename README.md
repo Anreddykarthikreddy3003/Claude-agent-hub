@@ -151,6 +151,7 @@ Plugin commands can also be typed with the plugin prefix, for example `/claude-a
 ```text
 cam accounts                     all accounts, usage, resets, next switch
 cam switch [name] [--force]      switch now; --force holds an account until it reaches 100%
+cam on | cam off                 run the Agent Hub, or pause everything it does
 cam freeze | cam unfreeze        stay on the active account until you unfreeze
 cam week                         weekly plan
 cam refresh                      fetch live usage now
@@ -170,6 +171,7 @@ Settings live in `%USERPROFILE%\.claude-accounts\config.json`. Most can be chang
 
 | Key | Default | Meaning |
 |---|---|---|
+| `enabled` | `true` | Master switch (top right of the dashboard, or `cam on` / `cam off`). Off: nothing runs on its own and no agent starts |
 | `autoSwitch` | `true` | Move Claude Code to the best account when the active one runs out |
 | `monitoring` | `true` | Keep usage of every account current in the background |
 | `sessionSwitchAt` | `95` | Switch away at this 5-hour usage % |

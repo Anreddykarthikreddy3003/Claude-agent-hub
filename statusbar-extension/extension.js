@@ -115,6 +115,10 @@ nav button:active{transform:none}
 nav button.on{background:var(--bg);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.2),0 0 0 .5px var(--sep)}
 nav button .n{font-size:11px;color:var(--muted);margin-left:6px;font-variant-numeric:tabular-nums}
 .chips{display:flex;gap:14px;margin-left:auto;color:var(--muted);font-size:12px;align-items:center}
+.master{display:flex;align-items:center;gap:8px;margin-left:16px;padding-left:16px;border-left:1px solid var(--sep);font-size:12px;font-weight:600;white-space:nowrap}
+.master .lbl.off{color:var(--muted)}
+.offbar{display:flex;align-items:center;gap:14px;margin:0 0 16px;padding:12px 16px;border-radius:10px;background:var(--fill);border:1px solid var(--sep)}
+.offbar .grow{flex:1;min-width:0}.offbar b{display:block;margin-bottom:2px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--idle);vertical-align:middle;margin-right:6px;flex:none}
 .s-working .dot,.dot.s-working{background:var(--ok)}.dot.s-done,.s-done .dot{background:var(--idle)}.dot.s-needs,.s-needs .dot{background:var(--warn)}
 .dot.s-error,.s-error .dot{background:var(--err)}.dot.s-waiting,.s-waiting .dot{background:var(--warn);opacity:.65}.dot.on{background:var(--ok)}.dot.off{background:var(--err)}
@@ -246,9 +250,9 @@ tr+tr td,tr+tr th{border-top:1px solid var(--sep)}
 
 .toast{position:fixed;right:16px;bottom:16px;background:var(--vscode-notifications-background,var(--fill-2));color:var(--fg);padding:9px 14px;border-radius:var(--r);display:none;max-width:440px;white-space:pre-wrap;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.28)}
 .toast.err{box-shadow:0 6px 20px rgba(0,0,0,.28),inset 3px 0 0 var(--err)}
-${compact ? '.list{width:100%;border-right:none}.split.has-sel .list{display:none}.split:not(.has-sel) .thread{display:none}.chips{display:none}.pmenu{width:100%;border-right:none}.acctwrap{flex-direction:column}.stats{grid-template-columns:1fr}.stats .st+.st::before{display:none}' : ''}
+${compact ? '.master{margin-left:auto;border-left:none;padding-left:0}.list{width:100%;border-right:none}.split.has-sel .list{display:none}.split:not(.has-sel) .thread{display:none}.chips{display:none}.pmenu{width:100%;border-right:none}.acctwrap{flex-direction:column}.stats{grid-template-columns:1fr}.stats .st+.st::before{display:none}' : ''}
 </style></head><body>
-<header><span class="title">Agent Hub</span><nav id="tabs"></nav><div class="chips" id="chips"></div></header>
+<header><span class="title">Agent Hub</span><nav id="tabs"></nav><div class="chips" id="chips"></div><div class="master" id="master"></div></header>
 <main id="main"><div class="empty">Connecting to the Agent Hub…</div></main><div class="toast" id="toast"></div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -298,6 +302,8 @@ function renderHeader() {
   const tabs = [['home', 'Home', ''], ['accounts', 'Accounts', ''], ['agents', 'Agents', agents.length ? (working ? working + ' working' : agents.length) : ''], ['map', 'Agent Map', ''], ['platforms', 'Platforms & Models', ''], ['logs', 'Logs', ''], ['help', 'Help', '']];
   $('tabs').innerHTML = tabs.map(([id, l, n]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'on' : '') + '">' + l + (n ? '<span class="n">' + esc(n) + '</span>' : '') + '</button>').join('');
   const acc = st?.accounts; const act = acc?.accounts?.find((a) => a.active);
+  const on = st?.accounts?.enabled !== false;
+  $('master').innerHTML = '<span class="lbl' + (on ? '' : ' off') + '">Agent Hub ' + (on ? 'on' : 'off') + '</span><label class="switch" title="' + (on ? 'Turn the Agent Hub off: nothing runs on its own and no agent can start' : 'Turn the Agent Hub on') + '"><input type="checkbox" data-setting="enabled" aria-label="Agent Hub on or off"' + (on ? ' checked' : '') + '><span></span></label>';
   $('chips').innerHTML =
     '<span><span class="dot ' + (S.live ? 'on' : 'off') + '"></span>' + (S.live ? 'Live' : 'Offline') + '</span>' +
     (act ? '<span title="' + esc(act.email || act.name) + '">Claude ' + esc(shortMail(act.email) || act.name) + ' · 5h ' + act.five.util + '% · wk ' + act.week.util + '%</span>' : '') +
@@ -368,7 +374,7 @@ function renderHome() {
     h += '<div class="hero">' + rings(act.five, act.week) +
       '<div class="who"><div class="k">' + (acc.frozen === act.name ? 'Active Claude account, frozen' : acc.forced === act.name ? 'Active Claude account, held until 100%' : 'Active Claude account') + '</div><div class="e" title="' + esc(act.email || act.name) + '">' + esc(act.email || act.name) + '</div>' +
       ln('Weekly limit', act.week) + ln('5-hour session', act.five) + (acc.frozen === act.name ? '<div class="ln muted">Frozen: Claude Code stays on this account, even at its limits, until you unfreeze it.</div>' : next ? '<div class="ln muted">When it runs out, Claude Code moves to ' + esc(next) + '</div>' : '') + '</div>' +
-      '<div class="hero-acts"><button class="primary" data-act="new-from-home">Start an agent</button><button data-act="goto-plat" data-p="claude">Manage accounts</button></div></div>';
+      '<div class="hero-acts"><button class="primary" data-act="new-from-home"' + (acc.enabled === false ? ' disabled title="Turn the Agent Hub on to start agents"' : '') + '>Start an agent</button><button data-act="goto-plat" data-p="claude">Manage accounts</button></div></div>';
   } else if (acc?.accounts?.length) {
     const pick = acc.accounts.find((a) => a.usable) || acc.accounts[0];
     h += acc.mainSignedIn
@@ -380,7 +386,9 @@ function renderHome() {
   h += '<div class="box stats">' +
     '<div class="st"><div class="v">' + (working ? working + (working === 1 ? ' agent running' : ' agents running') : 'No agents running') + '</div><div class="s">' + (needs ? '<span style="color:var(--warn)">' + needs + ' need you</span>' : agents.length + ' in total') + '</div></div>' +
     '<div class="st"><div class="v">' + totalSigned + ' accounts signed in</div><div class="s">on ' + PLAT_ORDER.length + ' platforms</div></div>' +
-    '<div class="st"><div class="v" style="color:' + (S.live ? 'var(--ok)' : 'var(--err)') + '">' + (S.live ? 'Service running' : 'Service offline') + '</div><div class="s">Monitoring ' + (acc?.monitoring === false ? 'off' : 'on') + ', switching ' + (acc?.autoSwitch === false ? 'off' : 'on') + '</div></div></div>';
+    (acc?.enabled === false
+      ? '<div class="st"><div class="v" style="color:var(--muted)">Agent Hub off</div><div class="s">Nothing runs on its own</div></div></div>'
+      : '<div class="st"><div class="v" style="color:' + (S.live ? 'var(--ok)' : 'var(--err)') + '">' + (S.live ? 'Service running' : 'Service offline') + '</div><div class="s">Monitoring ' + (acc?.monitoring === false ? 'off' : 'on') + ', switching ' + (acc?.autoSwitch === false ? 'off' : 'on') + '</div></div></div>');
   h += '<div class="quick"><button data-act="add-account" data-p="' + esc(S.acctPlat) + '">Add an account</button><button data-act="open-chat">Open Claude chat</button></div>';
 
   h += '<h3>Automation</h3>' + automationBox(acc);
@@ -750,7 +758,10 @@ function render() {
   renderHeader();
   const view = { home: renderHome, accounts: renderAccounts, agents: renderAgents, map: renderMap, platforms: renderPlatforms, logs: renderLogs, help: renderHelp }[S.tab] || renderAgents;
   const keepMsg = $('msg')?.value; const scroller = $('events'); const atBottom = !scroller || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 60;
-  $('main').innerHTML = S.state ? view() : '<div class="empty">' + (S.error ? esc(S.error) : 'Connecting to the Agent Hub…') + '</div>';
+  const offBar = S.state?.accounts?.enabled === false
+    ? '<div class="pad" style="padding-bottom:0"><div class="offbar"><div class="grow"><b>The Agent Hub is off</b><span class="small muted">Nothing is checked, switched or primed, and no agent can start. Claude Code keeps working normally on the account it is signed in to. Manual actions (switch, sign in, Test) still work.</span></div><button class="primary" data-act="hub-on">Turn on</button></div></div>'
+    : '';
+  $('main').innerHTML = S.state ? offBar + view() : '<div class="empty">' + (S.error ? esc(S.error) : 'Connecting to the Agent Hub…') + '</div>';
   if (keepMsg && $('msg')) $('msg').value = keepMsg;
   const ev = $('events'); if (ev && atBottom) ev.scrollTop = ev.scrollHeight;
 }
@@ -786,6 +797,7 @@ document.addEventListener('click', (e) => {
     case 'acct-preferred': return post({ cmd: 'acct-preferred', platform: t.dataset.p, name: t.dataset.n });
     case 'acct-force': return post({ cmd: 'acct-force', name: t.dataset.n });
     case 'acct-release': return post({ cmd: 'acct-release' });
+    case 'hub-on': return post({ cmd: 'setting', key: 'enabled', value: true });
     case 'acct-freeze': return post({ cmd: 'acct-freeze' });
     case 'import-current': return post({ cmd: 'import-current' });
     case 'acct-unfreeze': return post({ cmd: 'acct-unfreeze' });
@@ -920,7 +932,7 @@ function activate(ctx) {
     else if (acc?.accounts?.length && acc.mainSignedIn === false) parts.push('Claude: not signed in');
     if (working) parts.push(`$(sync~spin) ${working}`);
     if (needs) parts.push(`$(bell) ${needs}`);
-    item.text = `$(account) ${parts.join('   ') || 'Agent Hub'}`;
+    item.text = acc?.enabled === false ? '$(circle-slash) Agent Hub off' : `$(account) ${parts.join('   ') || 'Agent Hub'}`;
     item.backgroundColor = needs || (act && (act.status !== 'ok' || !acc.service?.running)) ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     item.tooltip = richTooltip(state, live);
     if (lastActive && act && act.name !== lastActive)
@@ -1021,7 +1033,7 @@ function activate(ctx) {
         case 'setting': {
           try {
             await api('POST', '/api/settings', { [m.key]: !!m.value });
-            const label = { autoSwitch: 'Automatic account switching', ready: 'Claude priming', monitoring: 'Background monitoring', primeAll: 'Session priming (all platforms)', primeCodex: 'Codex priming' }[m.key] || m.key;
+            const label = { enabled: 'The Agent Hub', autoSwitch: 'Automatic account switching', ready: 'Claude priming', monitoring: 'Background monitoring', primeAll: 'Session priming (all platforms)', primeCodex: 'Codex priming' }[m.key] || m.key;
             w.postMessage({ type: 'toast', text: `${label} is ${m.value ? 'on' : 'off'}.` });
           } catch (e) { w.postMessage({ type: 'toast', text: e.message, err: true }); }
           return refreshState();

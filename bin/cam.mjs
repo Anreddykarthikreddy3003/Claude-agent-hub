@@ -15,6 +15,7 @@ Accounts (log in once per account):
 Everyday:
   cam status                       same as "cam accounts"
   cam switch [name] [--force]      switch now (no name = best); --force: use it past 95%/98% and hold it until 100%
+  cam on | cam off                 master switch: run the Agent Hub or pause everything it does
   cam freeze                       stay on the active account, even at its limits, until unfreeze
   cam unfreeze                     end the freeze; automatic switching takes over again
   cam best                         ranked list of usable accounts
@@ -106,6 +107,13 @@ async function main() {
       return console.log(r.changed ? `Switched ${r.from ?? '(unmanaged)'} → ${r.to}. New chats use ${r.to}.` : `Already on ${r.to}.`);
     }
 
+    case 'on':
+    case 'off': {
+      const { saveConfig } = await import('../src/store.mjs');
+      saveConfig({ enabled: cmd === 'on' });
+      console.log(cmd === 'on' ? 'Agent Hub is on: checks, switching, priming (if enabled) and agents work again.' : 'Agent Hub is off: nothing runs on its own and no agent can start. Claude Code keeps working normally. Turn on again: cam on');
+      break;
+    }
     case 'freeze': {
       const { freezeActive } = await import('../src/switcher.mjs');
       const r = await freezeActive();

@@ -24,6 +24,7 @@ export function statusText() {
   const { cfg, st, views, accounts, now } = snapshot();
   const out = [];
   const primingOn = cfg.ready && cfg.primeAll !== false;
+  if (cfg.enabled === false) out.push('⏸ The Agent Hub is OFF: nothing is checked, switched or primed and no agent can start (turn it on: dashboard switch, top right, or cam on).');
   out.push(`Claude Agent Hub · auto-priming: ${primingOn ? 'ON (24/7)' : 'OFF'} · service: ${daemonLine(st, now)}`);
   if (!accounts.length) {
     out.push('', 'No accounts yet.', '  1. /accounts import <name>   save the login Claude Code is using now', '  2. /accounts add <name>      sign in to each other account once');
@@ -79,6 +80,7 @@ export function statusJson() {
   const best = rankViews(others)[0];
   return {
     now,
+    enabled: cfg.enabled !== false,
     ready: cfg.ready,
     autoSwitch: cfg.autoSwitch !== false,
     forced: st.forced?.name || null,
@@ -155,6 +157,7 @@ export function weekText() {
 export function statusLine() {
   const { cfg, st, views, now } = snapshot();
   if (!views.length) return '👤 no accounts · /accounts import <name>';
+  if (cfg.enabled === false) return '⏸ Agent Hub off';
   const a = views.find((v) => v.name === st.active);
   const parts = [];
   if (a) {

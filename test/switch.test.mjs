@@ -426,3 +426,51 @@ test('slotSafe: never the account on Claude Code\'s login, nothing while that lo
   assert.deepEqual(r.verified, { A: false, B: true });
   assert.deepEqual(r.unverified, { B: false });
 });
+
+// ── master switch: off = nothing runs on its own, no agent starts ──
+
+function offSandbox(enabled) {
+  const sb = sandbox();
+  fs.writeFileSync(path.join(sb.data, 'config.json'), JSON.stringify({ enabled, ready: true, notifications: false, claudePath: process.execPath }));
+  // A is at 100% (would normally switch), B is fresh and idle (would normally be primed / checked)
+  fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify({ active: 'A', usage: { A: U(100, 40), B: U(0, 10, { five: { util: 0, resetsAt: null }, attemptAt: Date.now() - 3600e3 }) }, alerts: {} }));
+  return sb;
+}
+const TICK = `globalThis.fetch = async () => new Response(JSON.stringify({ five_hour: { utilization: 0 }, seven_day: { utilization: 10 } }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const { tick } = await import('./src/daemon.mjs'); await tick();
+  const fs = await import('node:fs'); const st = JSON.parse(fs.readFileSync(process.env.CAM_HOME + '/state.json', 'utf8'));
+  const log = fs.existsSync(process.env.CAM_HOME + '/log.jsonl') ? fs.readFileSync(process.env.CAM_HOME + '/log.jsonl', 'utf8') : '';
+  console.log(JSON.stringify({ active: st.active, ticked: !!st.daemon?.lastTick, switches: (log.match(/"type":"switch"/g) || []).length, primes: (log.match(/"type":"prime"/g) || []).length, checkedB: st.usage.B.attemptAt > Date.now() - 60e3 }));`;
+
+test('master switch off: the background service switches, primes and checks nothing, but keeps ticking', () => {
+  const r = run(offSandbox(false), TICK);
+  assert.equal(r.active, 'A', 'no automatic switch away from the account at 100%');
+  assert.equal(r.switches, 0);
+  assert.equal(r.primes, 0);
+  assert.equal(r.checkedB, false, 'no usage check');
+  assert.equal(r.ticked, true, 'still alive, so the dashboard can turn it back on');
+});
+
+test('master switch on: the same situation switches as usual', () => {
+  const r = run(offSandbox(true), TICK);
+  assert.equal(r.active, 'B');
+  assert.equal(r.switches, 1);
+});
+
+test('master switch off: agents cannot start or receive messages, with a clear message', () => {
+  const r = run(offSandbox(false), `const { assertHubEnabled, OFF_MESSAGE } = await import('./src/store.mjs');
+    let err = null; try { assertHubEnabled(); } catch (e) { err = { message: e.message, status: e.status }; }
+    const { createAndStart } = await import('./src/hub/server.mjs');
+    let err2 = null; try { await createAndStart({ name: 'x', platform: 'claude', cwd: process.cwd() }); } catch (e) { err2 = e.message; }
+    console.log(JSON.stringify({ err, err2, same: err2 === OFF_MESSAGE }));`);
+  assert.equal(r.err.status, 409);
+  assert.match(r.err.message, /turned off/);
+  assert.equal(r.same, true);
+});
+
+test('master switch off: the chat hooks stay silent', () => {
+  const sb = offSandbox(false);
+  const out = spawnSync(process.execPath, ['bin/cam.mjs', 'hook', 'session-start'], { cwd: ROOT, input: '{}', encoding: 'utf8', timeout: 30000, env: { ...process.env, CAM_HOME: sb.data, CAM_MAIN_CONFIG_DIR: sb.main, CAM_NO_NOTIFY: '1' } });
+  assert.equal(out.stdout.trim(), '');
+  assert.equal(out.status, 0);
+});
