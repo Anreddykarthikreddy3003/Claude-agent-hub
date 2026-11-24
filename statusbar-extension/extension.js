@@ -415,7 +415,9 @@ function usageBlock(label, w) {
 }
 function accountCard(p, a) {
   let badge;
-  const lt = lastTest(p, a.name);
+  // A failed Test stops counting once a later usage check succeeded (e.g. after signing in again)
+  const ltRaw = lastTest(p, a.name);
+  const lt = ltRaw && ltRaw.ok === false && a.claude && a.fetchedAt && a.fetchedAt > ltRaw.at ? null : ltRaw;
   if (a.pendingLogin) badge = '<span class="badge b-info"><span class="spin"></span>Signing in…</span>';
   else if (!a.signedIn) badge = '<span class="badge b-warn">Not signed in</span>';
   else if (lt && lt.ok === false) badge = '<span class="badge b-err">Not working</span>';
@@ -444,7 +446,7 @@ function accountCard(p, a) {
     if (a.usage.stale) h += '<div class="small muted">usage: last known (refreshes when the account is active)</div>';
   }
   // last test result / test in progress
-  const tkey = p + ':' + a.name; const test = S.state?.tests?.[tkey];
+  const tkey = p + ':' + a.name; const test = lt;
   if (S.testing[tkey]) h += '<div class="small"><span class="spin"></span>Testing: sending a one-word "hi"…</div>';
   else if (test) {
     const tk = test.tokens ? (test.tokens.input || 0) + (test.tokens.output || 0) : null;

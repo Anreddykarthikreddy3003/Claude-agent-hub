@@ -474,3 +474,24 @@ test('master switch off: the chat hooks stay silent', () => {
   assert.equal(out.stdout.trim(), '');
   assert.equal(out.status, 0);
 });
+
+// ── a new sign-in clears an old error right away ──
+
+test('after signing in again, the old "Sign in again" error is cleared at the next tick, not 30 minutes later', () => {
+  const sb = sandbox();
+  const usage = `globalThis.fetch = async () => new Response(JSON.stringify({ five_hour: { utilization: 5 }, seven_day: { utilization: 9 } }), { status: 200, headers: { 'content-type': 'application/json' } });`;
+  const check = (credHash) => {
+    const s = { active: 'A', usage: { B: U(0, 0, { attemptAt: Date.now() - 2 * 60e3, needsLogin: true, renewFails: 2, renewFailedAt: Date.now() - 2 * 60e3, error: 'signed out: Anthropic no longer accepts this saved sign-in. Sign in again', credHash }) }, alerts: {} };
+    fs.writeFileSync(path.join(sb.data, 'state.json'), JSON.stringify(s));
+    return run(sb, usage + `const { refreshUsage } = await import('./src/collector.mjs'); await refreshUsage({ names: ['B'], maxAgeMs: 30 * 60e3 }); const fs = await import('node:fs'); console.log(JSON.stringify(JSON.parse(fs.readFileSync(process.env.CAM_HOME + '/state.json', 'utf8')).usage.B));`);
+  };
+  // the saved login is new (its fingerprint differs from the one recorded at the last check)
+  let b = check('fingerprint-of-the-revoked-login');
+  assert.equal(b.needsLogin, false, JSON.stringify(b));
+  assert.equal(b.error, null);
+  assert.equal(b.week.util, 9);
+  assert.ok(b.credHash && b.credHash !== 'fingerprint-of-the-revoked-login', 'the new fingerprint is recorded');
+  // same login as at the last check: no extra request, waits for the regular check
+  b = check(b.credHash);
+  assert.equal(b.needsLogin, true, 'unchanged login: nothing new to check yet');
+});

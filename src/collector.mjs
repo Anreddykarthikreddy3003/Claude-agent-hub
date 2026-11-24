@@ -152,18 +152,30 @@ export async function refreshUsage({ names = null, maxAgeMs = 0, noRenew = false
   await detectActive(); // keeps the trusted owner record current before locating logins
   const st = loadState();
   const results = {};
+  const backfill = {};
   for (const acc of accounts) {
     if (names && !names.includes(acc.name)) continue;
     const prev = st.usage?.[acc.name];
-    const resetPassed = [prev?.five?.resetsAt, prev?.week?.resetsAt].some((t) => t && t <= now && t > (prev?.attemptAt || 0));
-    if (prev?.backoffUntil && prev.backoffUntil > now) continue;
-    if (prev && now - (prev.attemptAt || 0) < MIN_GAP_MS && !resetPassed) continue;
-    // A check that failed for a temporary reason (network, outage, 429) is retried once its back-off ends,
-    // instead of waiting for the next regular check (30 min for idle accounts).
-    const retryFailed = !!prev?.error && !!prev.backoffUntil && prev.backoffUntil <= now;
-    if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed && !retryFailed) continue;
-    results[acc.name] = await fetchOne(acc, prev, { noRenew });
+    // A new sign-in (the saved login changed since the last check) is checked right away, so an old
+    // "Sign in again" error doesn't linger until the next regular check (30 min for idle accounts).
+    const credNow = tokenHash(locate(acc).oauth);
+    const newLogin = !!prev?.credHash && !!credNow && prev.credHash !== credNow;
+    // Records from before fingerprints existed: note the current login now (no request), so a later sign-in is noticed
+    if (prev && !prev.credHash && credNow) backfill[acc.name] = credNow;
+    if (!newLogin) {
+      const resetPassed = [prev?.five?.resetsAt, prev?.week?.resetsAt].some((t) => t && t <= now && t > (prev?.attemptAt || 0));
+      if (prev?.backoffUntil && prev.backoffUntil > now) continue;
+      if (prev && now - (prev.attemptAt || 0) < MIN_GAP_MS && !resetPassed) continue;
+      // A check that failed for a temporary reason (network, outage, 429) is retried once its back-off ends,
+      // instead of waiting for the next regular check (30 min for idle accounts).
+      const retryFailed = !!prev?.error && !!prev.backoffUntil && prev.backoffUntil <= now;
+      if (prev && maxAgeMs && now - (prev.attemptAt || 0) < maxAgeMs && !resetPassed && !retryFailed) continue;
+    }
+    const r = await fetchOne(acc, newLogin ? { ...prev, renewFails: 0, renewFailedAt: null, backoffUntil: null } : prev, { noRenew });
+    results[acc.name] = { ...r, credHash: tokenHash(locate(acc).oauth) };
+    if (newLogin) appendLog('new-sign-in-checked', { name: acc.name, ok: !r.error });
   }
+  if (Object.keys(backfill).length) await updateState((s) => { for (const [n, h] of Object.entries(backfill)) if (s.usage[n] && !s.usage[n].credHash) s.usage[n].credHash = h; });
   if (Object.keys(results).length) {
     await updateState((s) => {
       for (const [name, r] of Object.entries(results)) {

@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-11-24
+
+### Fixed
+- After signing in to an account again, its old "Sign in again" error stayed until the next regular check (up to 30 minutes) or until Test was pressed. The service now notices that the saved sign-in changed and checks that account within a minute, skipping waits and back-offs.
+- A failed Test result ("Not working … sign in") kept showing after signing in again. It no longer counts once a later usage check succeeds.
+
 ## [1.0.10] - 2026-11-23
 
 ### Added
@@ -100,7 +106,8 @@ First public release.
 - One-command install and uninstall for Windows (`cam install`).
 - Optional session priming, off by default (`cam ready on`).
 
-[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.10...HEAD
+[Unreleased]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.11...HEAD
+[1.0.11]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/Anreddykarthikreddy3003/Claude-agent-hub/compare/v1.0.7...v1.0.8
